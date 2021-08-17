@@ -1,0 +1,1680 @@
+ toolkit.cba   cbA65 v.1.00a, Feb 28 2008  -- Thu Mar 06 08:20:27 2008
+
+ "BASIC Programmer's Toolkit for Commodore Pet BASIC v2.0"
+
+
+ 000001                  ;   toolkit.h65,  ReSource65: v 0.91a,  Jan 23 2008
+ 000002                  ;ÿ
+ 000003                  ;   The BASIC Programmer's Toolkit
+ 000004                  ;   ==============================
+ 000005                  ;   (C) 1979, Palo Alto ICs
+ 000006                  ;
+ 000007                  ;   Written and reconstructed (resuscitated?, resurrected?)
+ 000008                  ;   by Chuck Bond.
+ 000009                  ;
+ 000010                  ;   Thanks to Harry J. Saal and Len Shustek for invaluable
+ 000011                  ;   technical advice and assistance with the Toolkit project.
+ 000012                  ;   Special thanks to Dr. Saal for recognizing the potential
+ 000013                  ;   of the Toolkit.
+ 000014                  ;
+ 000015                  ;   Thanks also to Jim Butterfield for providing indispensable
+ 000016                  ;   memory maps for Commodore computers. His work spawned not
+ 000017                  ;   only the Toolkit, but also innumerable other PET programs,
+ 000018                  ;   addons and accessories.
+ 000019                  ;
+ 000020                  ;   This source file is written for the cbA65 assembler and
+ 000021                  ;   Commodore PET BASIC ROM version 2.0 (sometimes called the
+ 000022                  ;   'upgrade' ROM).
+ 000023                  ;
+ 000024                  ;*************************************************************
+ 000025                  ;
+ 000026                  ;   The BASIC Programmer's Toolkit is a BASIC extender package
+ 000027                  ;   for Commodore PET computers. It adds the following commands
+ 000028                  ;   to the resident BASIC interpreter:
+ 000029                  ;
+ 000030                  ;       AUTO        Automatic line numbering
+ 000031                  ;       STEP        Execute program one line at a time
+ 000032                  ;       TRACE       Tracks executing lines by line number
+ 000033                  ;       OFF         Exits from TRACE or STEP mode
+ 000034                  ;       RENUMBER    Renumbers program lines
+ 000035                  ;       DELETE      Deletes a range of program lines
+ 000036                  ;       HELP        Displays line with last error highlighted
+ 000037                  ;       FIND        Locate lines with given keywords or strings
+ 000038                  ;       DUMP        Display all program variables with values
+ 000039                  ;       APPEND      Adds tape program to end of current program
+ 000040                  ;
+ 000041                  ;**************************************************************
+ 000042                  ;
+ 000043                  ;   The BASIC Programmer's Toolkit is provided in a 2k
+ 000044                  ;   (2048 byte) ROM with optional card, socket and connector. 
+ 000045                  ;
+ 000046                  ;   After installation, power up the PET and invoke the Toolkit
+ 000047                  ;   with:
+ 000048                  ;
+ 000049                  ;       SYS(45056)
+ 000050                  ;
+ 000051                  ;   NOTE: 45056 = $B000
+ 000052                  ;
+
+                              page 1
+
+ toolkit.cba   cbA65 v.1.00a, Feb 28 2008  -- Thu Mar 06 08:20:27 2008
+
+ "BASIC Programmer's Toolkit for Commodore Pet BASIC v2.0"
+
+ 000053                  ;   Uninstall with:
+ 000054                  ;
+ 000055                  ;       SYS(57622)
+ 000056                  ;
+ 000057                  ;**************************************************************
+ 000058                  ;
+ 000059                  ;   Miscellaneous BASIC Tidbits
+ 000060                  ;   ===========================
+ 000061                  ;
+ 000062                  ;   The format of BASIC program lines is:
+ 000063                  ;
+ 000064                  ;       line link | line number | tokenized text       | NULL
+ 000065                  ;       ----------|-------------|----------------....--|------
+ 000066                  ;         LLLL         NNNN       XXXXXXXX...........X    0
+ 000067                  ;          |
+ 000068                  ;          v
+ 000069                  ;         LLLL         NNNN       XXXX...............X    0
+ 000070                  ;          .
+ 000071                  ;          .
+ 000072                  ;          v
+ 000073                  ;         NULL    (End Of Program)
+ 000074                  ;
+ 000075                  ;    where LLLL is a 2-byte pointer to the next line link, and
+ 000076                  ;    NNNN is a 2-byte integer < 64000. The 1st byte of the 1st
+ 000077                  ;    link is at $0401.
+ 000078                  ;
+ 000079                  ;    The largest line number supported by BASIC is 63999.
+ 000080                  ;
+ 000081                  ;-------------------------------------------------------------
+ 000082                  ;
+ 000083                  ;   BASIC variable names consist of one or two characters. The
+ 000084                  ;   first (or only) character is alphabetic and the second
+ 000085                  ;   (if any) may be alphabetic or numeric. If no second character
+ 000086                  ;   is specified, a blank is used.
+ 000087                  ;
+ 000088                  ;   The variable type is indicated by the high bit of each 8-bit
+ 000089                  ;   character.  Integers are indicated with both high bits set.
+ 000090                  ;   Strings are indicated with the high bit of the first
+ 000091                  ;   character set. Floating point variables have neither high
+ 000092                  ;   bit set.
+ 000093                  ;
+ 000094                  .title "BASIC Programmer's Toolkit for Commodore Pet BASIC v2.0"
+ 000095                  .files xref,h65,rom=2048
+ 000096                  .print cols=100,stats
+ 000097                  ;
+ 000098                  ;   Constant equates and 'magic' numbers
+ 000099                  ;
+ 000100      =(00013)    CR          .equ $0D        ; ASCII carriage return
+ 000101      =(00174)    RDY         .equ $AE        ; offset in ROM to "READY." message
+ 000102      =(00032)    VBLNK       .equ $20        ; mask for vertical blank bit in VIA
+ 000103      =(00000)    OFFM        .equ $00        ; turns off AUTO, TRACE or STEP
+ 000104      =(00127)    POSMSK      .equ $7F        ; mask to force positive byte
+ 000105      =(00001)    AUTOM       .equ $01        ; AUTO mode marker
+
+                              page 2
+
+ toolkit.cba   cbA65 v.1.00a, Feb 28 2008  -- Thu Mar 06 08:20:27 2008
+
+ "BASIC Programmer's Toolkit for Commodore Pet BASIC v2.0"
+
+ 000106      =(00002)    TRACEM      .equ $02        ; TRACE mode marker
+ 000107      =(00003)    STEPM       .equ $03        ; STEP mode marker
+ 000108      =(32768)    SCREEN      .equ $8000      ; SCREEN RAM starting location
+ 000109      =(00164)    TKNTO       .equ $A4        ; BASIC token for TO statement
+ 000110      =(00171)    TKNMIN      .equ $AB        ; BASIC token for minus sign: -
+ 000111      =(63999)    MAXLIN      .equ $F9FF      ; maximum line number for BASIC (63999)
+ 000112      =(00195)    BASPG       .equ $C3        ; BASIC page for direct mode CHRGET call
+ 000113                  ;
+ 000114                  ;   Zero page locations
+ 000115                  ;
+ 000116      =(00005)    COUNT       .equ $0005  ; temporary byte storage for counters, etc.
+ 000117      =(00009)    FLAG1       .equ $0009  ; Misc. flag or index value
+ 000118      =(00017)    TMPINT      .equ $0011  ; integer temp
+ 000119      =(00031)    STRPTR      .equ $001F  ; pointer to string variable
+ 000120      =(00033)    TMPTR0      .equ $0021  ; temporary pointer to BASIC text
+ 000121      =(00040)    BASPTR      .equ $0028  ; pointer to start of BASIC program
+ 000122      =(00042)    VARPTR      .equ $002A  ; pointer to start of BASIC variables
+ 000123      =(00044)    ARRPTR      .equ $002C  ; pointer to start of BASIC arrays
+ 000124      =(00052)    MEMSZ       .equ $0034  ; highest memory location used by BASIC
+ 000125      =(00054)    CURRLN      .equ $0036  ; current BASIC line number
+ 000126      =(00066)    VARNAM      .equ $0042  ; current VARIABLE name
+ 000127      =(00068)    VARADR      .equ $0044  ; address of VARIABLE
+ 000128      =(00085)    TMPTR1      .equ $0055  ; temporary storage for integers or pointers
+ 000129      =(00087)    TMPTR2      .equ $0057  ;    "                     "
+ 000130      =(00092)    TMPTR3      .equ $005C  ;    "                     "
+ 000131      =(00095)    FACCM       .equ $005F  ; f.p. mantissa (int. storage for conversion)
+ 000132      =(00112)    CHRGET      .equ $0070  ; The infamous BASIC character/token fetch
+ 000133      =(00118)    CHRGOT      .equ $0076  ; get last character
+ 000134      =(00119)    TXTPTR      .equ $0077  ; pointer into BASIC program
+ 000135      =(00124)    MODE        .equ $007C  ; OFF, AUTO, STEP or TRACE marker (0,1,2 or 3)
+ 000136      =(00128)    LINNUM1     .equ $0080  ; work area and storage for BASIC line    
+ 000137      =(00130)    LINNUM2     .equ $0082  ;  numbers used by AUTO and RENUMBER
+ 000138      =(00132)    TMPTR4      .equ $0084  ; temporary pointer 
+ 000139      =(00134)    TMPTR5      .equ $0086  ; temporary pointer or byte storage (see below)
+ 000140      =(00134)    TMPERR      .equ $0086  ; temporary offset to char used by HELP routine
+ 000141      =(00135)    SAVEX       .equ $0087  ; temporary storage for BASIC 'x' register
+ 000142      =(00150)    STATUS      .equ $0096  ; BASIC status byte
+ 000143      =(00152)    SHIFTKEY    .equ $0098  ; SHIFT key pressed = 1, not pressed = 0
+ 000144      =(00157)    LDVERF      .equ $009D  ; LOAD/VERIFY flag for cassette
+ 000145      =(00158)    NUMCHR      .equ $009E  ; number of characters in keyboard buffer
+ 000146      =(00159)    REVFLG      .equ $009F  ; screen reverse field flag
+ 000147      =(00199)    TAPTMP1     .equ $00C7  ; temporary pointers for tape handler
+ 000148      =(00201)    TAPTMP2     .equ $00C9  ;    "         "           "
+ 000149      =(00209)    FNLEN       .equ $00D1  ; number of characters in file name
+ 000150      =(00212)    DEVID       .equ $00D4  ; device ID
+ 000151      =(00214)    TAPBUFF     .equ $00D6  ; pointer to start of tape buffer
+ 000152                  ;
+ 000153                  ;   stack page
+ 000154                  ;
+ 000155      =(00256)    STKPAG      .equ $0100
+ 000156                  ;
+ 000157                  ;   BASIC input buffer
+ 000158                  ;
+
+                              page 3
+
+ toolkit.cba   cbA65 v.1.00a, Feb 28 2008  -- Thu Mar 06 08:20:27 2008
+
+ "BASIC Programmer's Toolkit for Commodore Pet BASIC v2.0"
+
+ 000159      =(00512)    INBUFF      .equ $0200 ; direct mode input buffer and work area
+ 000160      =(00623)    KEYBUFF     .equ $026F ; BASIC keyboard buffer
+ 000161                  ;
+ 000162                  ;   cassette buffer
+ 000163                  ;
+ 000164      =(00992)    SAFTMP1     .equ $03E0 ; safe temporary when cassette #2 not used
+ 000165      =(00993)    SAFTMP2     .equ $03E1 ;  "              "                "
+ 000166      =(00994)    STEPSZ      .equ $03E2 ; line spacing for AUTO and RENUMBER
+ 000167      =(00996)    LNBUFF      .equ $03E4 ; Line buffer for TRACE and STEP scrolling
+ 000168      =(00998)    TRCBUF      .equ $03E6 ; buffer for displayed TRACE lines (integers)
+ 000169                  ;
+ 000170                  ;   BASIC entry points
+ 000171                  ;
+ 000172      =(49298)    KWDLST      .equ $C092 ; list of BASIC keywords
+ 000173      =(50005)    PRTERR      .equ $C355 ; print error message
+ 000174      =(50039)    ERRMSG      .equ $C377 ; print ERROR
+ 000175      =(50057)    RDYMSG      .equ $C389 ; print READY.
+ 000176      =(50233)    FIXLINKS    .equ $C439 ; reset BASIC line links
+ 000177      =(50325)    LOOKUP      .equ $C495 ; get BASIC token for keyword
+ 000178      =(50476)    FINDLINE    .equ $C52C ; get ptr to BASIC line. num: ($11), ptr: ($5C)
+ 000179      =(50546)    RST_PTRS    .equ $C572 ; reset BASIC pointers to default values
+ 000180      =(51315)    RD_INT      .equ $C873 ; convert ASCII string to integer in $11,$12
+ 000181      =(51678)    PUT_CRLF    .equ $C9DE ; print CR/LF to device
+ 000182      =(51740)    PUT_STRING  .equ $CA1C ; prepare and print ASCII string to device
+ 000183      =(51746)    PRTSTR      .equ $CA22 ; print string
+ 000184      =(51781)    PUTCHR      .equ $CA45 ; print character
+ 000185      =(52739)    SYNERR      .equ $CE03 ; display ?SYNTAX ERROR msg
+ 000186      =(53353)    LOCVAR      .equ $D069 ; find an f.p. variable by name
+ 000187      =(53869)    FX2FLT      .equ $D26D ; convert fixed point to floating point
+ 000188      =(55982)    LDFACC      .equ $DAAE ; load f.p. number fo FACC1
+ 000189      =(56149)    INT2FP      .equ $DB55 ; convert integer to f.p.
+ 000190      =(56533)    PRTLIN      .equ $DCD5 ; print line number
+ 000191      =(56537)    PRTINT      .equ $DCD9 ; print integer in a(hi),x(lo)
+ 000192      =(56547)    CNV_PRT     .equ $DCE3 ; convert f.p. in FACC1 to ASCII and print
+ 000193      =(56553)    FP2ASC      .equ $DCE9 ; convert to ASCII string at bottom of stack
+ 000194                  ;
+ 000195                  ;   Screen editor
+ 000196                  ;
+ 000197      =(57610)    NUMCHK      .equ $E10A ; clear carry if 'a' contains ASCII digit
+ 000198                  ;
+ 000199                  ;   I/O ports
+ 000200      =(59456)    VIA         .equ $E840 ; misc. operating system flags and VBLANK
+ 000201                  ;
+ 000202                  ;   Kernel (kernal) entry points
+ 000203                  ;
+ 000204      =(61782)    PRTMON      .equ $F156  ; print MONITOR message at index in 'y'
+ 000205      =(62438)    PRTLOAD     .equ $F3E6  ; print LOAD message
+ 000206      =(62447)    PRTRDY      .equ $F3EF  ; print READY. message
+ 000207      =(62474)    PRTSRCH     .equ $F40A  ; print SEARCHING message
+ 000208      =(62526)    GETPARM     .equ $F43E  ; get device parameters
+ 000209      =(62612)    GETHDR      .equ $F494  ; get tape program header
+ 000210      =(62830)    PRTFNF      .equ $F56E  ; print FILE NOT FOUND message
+ 000211      =(62886)    SRCH_HDR    .equ $F5A6  ; search tape for next header
+
+                              page 4
+
+ toolkit.cba   cbA65 v.1.00a, Feb 28 2008  -- Thu Mar 06 08:20:27 2008
+
+ "BASIC Programmer's Toolkit for Commodore Pet BASIC v2.0"
+
+ 000212      =(63036)    RD_HDR      .equ $F63C  ; get tape program start & end addresses  
+ 000213      =(63062)    SET_BUFF    .equ $F656  ; set buffer start address
+ 000214      =(63506)    WT_PLAY     .equ $F812  ; wait for cassette PLAY switch
+ 000215      =(63582)    RD_TAPE     .equ $F85E  ; read cassette tape
+ 000216      =(63718)    WT_IO       .equ $F8E6  ; wait for I/O completion
+ 000217      =(65505)    STOPKEY     .equ $FFE1  ; check for stop key and restart BASIC 
+ 000218                  ;
+ 000219                  ;   Toolkit initialization entry
+ 000220                  ;
+ 000221                  ;   Call with SYS(45056)
+ 000222                  ;
+ 000223 B000                         .org $B000
+ 000224 B000 4C 7F B2    TOOLKIT     jmp INITROM        ; Toolkit initialization.
+ 000225                  ;
+ 000226                  ;  Initialize line numbering values for AUTO and RENUMBER
+ 000227                  ;
+ 000228 B003 A9 0A       INITVAR     lda #10            ; Default BASIC line spacing.
+ 000229 B005 8D E2 03                sta STEPSZ         ; Reference storage location.
+ 000230 B008 A9 00                   lda #$00            
+ 000231 B00A 8D E3 03                sta STEPSZ+1       
+ 000232 B00D 85 83                   sta LINNUM2+1       
+ 000233 B00F 85 7C                   sta MODE            
+ 000234 B011 85 81                   sta LINNUM1+1       
+ 000235 B013 A9 64                   lda #100           ; Default BASIC starting line.
+ 000236 B015 85 82                   sta LINNUM2        ; Reference location.
+ 000237 B017 85 80                   sta LINNUM1        ; Working location.
+ 000238 B019 60                      rts         
+ 000239                  ;
+ 000240                  ;  Get line numbering parameters: STARTING LINE, STEP SIZE
+ 000241                  ;
+ 000242 B01A 20 70 00    LINPARMS    jsr CHRGET         ; Check for numeric parameter.
+ 000243 B01D F0 32                   beq PARMEX         ; No parameters, use defaults
+ 000244 B01F B0 17                   bcs PRMERR         ; IF not a number, error.
+ 000245 B021 20 73 C8                jsr RD_INT         ; ELSE get integer to TMPINT
+ 000246 B024 48                      pha                ; Save number terminator.
+ 000247 B025 A5 12                   lda TMPINT+1       ; ASCII number is returned
+ 000248 B027 A6 11                   ldx TMPINT         ;  as binary integer here.
+ 000249 B029 85 83                   sta LINNUM2+1      ; Replace default starting
+ 000250 B02B 86 82                   stx LINNUM2        ;  line number.
+ 000251 B02D 85 81                   sta LINNUM1+1      ; Initialize working value.
+ 000252 B02F 86 80                   stx LINNUM1        
+ 000253 B031 68                      pla                ; Check terminator.
+ 000254 B032 F0 1D                   beq PARMEX         ; No step size, use default
+ 000255 B034 C9 2C                   cmp #','           ; IF separator, get next
+ 000256 B036 F0 03                   beq @F             ;  number.
+ 000257 B038 4C 03 CE    PRMERR      jmp SYNERR         ; ELSE print error.
+ 000258 B03B 20 70 00    @           jsr CHRGET          
+ 000259 B03E B0 F8                   bcs PRMERR         ; IF not a number, error.
+ 000260 B040 20 73 C8                jsr RD_INT         ; ELSE get line spacing
+ 000261 B043 48                      pha                ;  (STEPSIZE) to TMPINT.
+ 000262 B044 A5 12                   lda TMPINT+1       ; Copy to safe place.
+ 000263 B046 A6 11                   ldx TMPINT          
+ 000264 B048 8D E3 03                sta STEPSZ+1        
+
+                              page 5
+
+ toolkit.cba   cbA65 v.1.00a, Feb 28 2008  -- Thu Mar 06 08:20:27 2008
+
+ "BASIC Programmer's Toolkit for Commodore Pet BASIC v2.0"
+
+ 000265 B04B 8E E2 03                stx STEPSZ          
+ 000266 B04E 68                      pla                 
+ 000267 B04F D0 E7                   bne PRMERR         ; Extra characters on line?
+ 000268 B051 60          PARMEX      rts                ; No, we're done.
+ 000269                  ;
+ 000270                  ; Update BASIC line number for AUTO and RENUMBER
+ 000271                  ;
+ 000272 B052 18          NXTLIN      clc                ; Add line step size to 
+ 000273 B053 A5 80                   lda LINNUM1        ;  current line number.
+ 000274 B055 6D E2 03                adc STEPSZ          
+ 000275 B058 85 80                   sta LINNUM1         
+ 000276 B05A A5 81                   lda LINNUM1+1
+ 000277 B05C 6D E3 03                adc STEPSZ+1       
+ 000278 B05F 85 81                   sta LINNUM1+1       
+ 000279 B061 B0 02                   bcs @F              
+ 000280 B063 C9 FA                   cmp >(MAXLIN+1)    ; Set carry if invalid #.
+ 000281 B065 60          @           rts                ; Carry clear if OK.
+ 000282                  ;
+ 000283                  ;       RENUMBER
+ 000284                  ;
+ 000285                  ;  Accepts:
+ 000286                  ;            RENUMBER               Uses default values.
+ 000287                  ;            RENUMBER start         Uses given start, default step.
+ 000288                  ;            RENUMBER start,step    Uses given start, step
+ 000289                  ;
+ 000290                  ;  The strategy employed to renumber a BASIC program is as follows:
+ 000291                  ;
+ 000292                  ;       1) Get new starting line number and number step size.
+ 000293                  ;       2) Check the validity of the numbers by calculating
+ 000294                  ;           the new (trial) line numbers from program start to
+ 000295                  ;           end. Do not alter the program in this phase.
+ 000296                  ;       3) IF the last program line number is too large, exit.
+ 000297                  ;       4) ELSE keep the existing line numbers and line links
+ 000298                  ;           intact while scanning program text for references
+ 000299                  ;           to (old) line numbers.
+ 000300                  ;       5) Calculate new line number for each reference to an
+ 000301                  ;           old line number, and replace old number with new one.
+ 000302                  ;           Adjust text and pointers as needed to fit.
+ 000303                  ;       6) When the end-of-program is reached, go back to start
+ 000304                  ;           of program and replace old line numbers with new
+ 000305                  ;           ones.
+ 000306                  ;       7) Reset line links and return to BASIC.
+ 000307                  ;
+ 000308 B066 20 03 B0    _RENUM      jsr INITVAR        ; Set default line numbering.
+ 000309 B069 20 1A B0                jsr LINPARMS       ; Get line parms, if any. 
+ 000310 B06C 20 53 B2                jsr COPYPTR        ; Set temporary pointer to pgm.
+ 000311 B06F 28                      .byte BASPTR        
+ 000312 B070 5C                      .byte TMPTR3       ; TMPTR3 will be BASIC scanner.
+ 000313                  ;
+ 000314                  ;  Do a dry run of new line numbers to see if they fit the program.
+ 000315                  ;
+ 000316 B071 20 DF B0    RNCHKLP     jsr SKPLNK         ; Get start of next line.
+ 000317 B074 D0 03                   bne @F             ; Test lines until EOP.
+
+                              page 6
+
+ toolkit.cba   cbA65 v.1.00a, Feb 28 2008  -- Thu Mar 06 08:20:27 2008
+
+ "BASIC Programmer's Toolkit for Commodore Pet BASIC v2.0"
+
+ 000318 B076 4C AE B0                jmp RNMAIN         ; If OK, go to main loop 
+ 000319 B079 20 52 B0    @           jsr NXTLIN         ; Update line number.
+ 000320 B07C 90 F3                   bcc RNCHKLP        ; Loop and check another.
+ 000321 B07E 4C 38 B2                jmp LINERR         ; Line number too big!
+ 000322                  
+ 000323 B081 A9 FF       GO_BAS      lda #$FF           ; Start BASIC.
+ 000324 B083 85 37                   sta CURRLN+1       ; Disable current line number.
+ 000325 B085 4C 89 C3                jmp RDYMSG         
+ 000326                  ;
+ 000327                  ; After text has been renumbered, fix the BASIC lines, ptrs and exit.
+ 000328                  ;
+ 000329 B088 A5 82       RNNUM       lda LINNUM2        ; Initialize starting line 
+ 000330 B08A 85 80                   sta LINNUM1        ;  number.
+ 000331 B08C A5 83                   lda LINNUM2+1       
+ 000332 B08E 85 81                   sta LINNUM1+1       
+ 000333 B090 20 53 B2                jsr COPYPTR        ; Make a temporary pointer
+ 000334 B093 28                      .byte BASPTR       ;  into BASIC text.
+ 000335 B094 5C                      .byte TMPTR3        
+ 000336 B095 A0 03       @           ldy #$03           ; Offset to low byte of
+ 000337 B097 A5 81                   lda LINNUM1+1      ;  line number.
+ 000338 B099 91 5C                   sta (TMPTR3),y     ; Replace low byte.
+ 000339 B09B 88                      dey                 
+ 000340 B09C A5 80                   lda LINNUM1         
+ 000341 B09E 91 5C                   sta (TMPTR3),y     ; Replace high byte.
+ 000342 B0A0 20 52 B0                jsr NXTLIN         ; Update line number.
+ 000343 B0A3 20 DF B0                jsr SKPLNK          
+ 000344 B0A6 D0 ED                   bne @B             ; Loop until end of program.
+ 000345 B0A8 20 72 C5                jsr RST_PTRS       ; Clean up and go
+ 000346 B0AB 4C 81 B0                jmp GO_BAS         ;  back to BASIC.
+ 000347                  ;
+ 000348                  ; Main RENUMBER loop. Line numbering parameters have checked OK.
+ 000349                  ;
+ 000350 B0AE 20 76 B2    RNMAIN      jsr SETBAS         ; Reset temporary BASIC ptr.
+ 000351 B0B1 20 DF B0    RNILOOP     jsr SKPLNK         ; Skip to next link.
+ 000352 B0B4 F0 D2                   beq RNNUM          ; If EOP, cleanup and exit.
+ 000353 B0B6 A0 04                   ldy #$04           ; Initialize 'in-string' flag.
+ 000354 B0B8 84 09                   sty FLAG1           
+ 000355 B0BA B1 5C       RNLNLP      lda (TMPTR3),y     ; Get next token from BASIC.
+ 000356 B0BC F0 F3       RNCONT      beq RNILOOP        ; IF EOL, go to line handler.
+ 000357 B0BE C9 22                   cmp #'"'           ; Is this START/END of string?
+ 000358 B0C0 D0 08                   bne @F             ; Continue, if not.
+ 000359 B0C2 A5 09                   lda FLAG1          ; Toggle 'in_string' flag.
+ 000360 B0C4 49 FF                   eor #$FF            
+ 000361 B0C6 85 09                   sta FLAG1           
+ 000362 B0C8 D0 12                   bne RNXTTKN        ; Get next token (always). 
+ 000363 B0CA 24 09       @           bit FLAG1          ; In string?
+ 000364 B0CC 30 0E                   bmi RNXTTKN        ; Get next token, if so.
+ 000365 B0CE C9 8F                   cmp #$8F           ; REM token?
+ 000366 B0D0 F0 DF                   beq RNILOOP        ; Yes, ignore this line.
+ 000367 B0D2 A2 06                   ldx #$06           ; Check for any statement
+ 000368 B0D4 DD 31 B2    @           cmp TKNLST-1,x     ;  (token) which uses 
+ 000369 B0D7 F0 15                   beq CHKNUM         ;  line numbers and test
+ 000370 B0D9 CA                      dex                ;  number if found.
+
+                              page 7
+
+ toolkit.cba   cbA65 v.1.00a, Feb 28 2008  -- Thu Mar 06 08:20:27 2008
+
+ "BASIC Programmer's Toolkit for Commodore Pet BASIC v2.0"
+
+ 000371 B0DA D0 F8                   bne @B              
+ 000372 B0DC C8          RNXTTKN     iny                ; No tokens, do next line.
+ 000373 B0DD D0 DB                   bne RNLNLP         ; Branch always.
+ 000374                  
+ 000375 B0DF A0 00       SKPLNK      ldy #$00             
+ 000376 B0E1 B1 5C                   lda (TMPTR3),y     ; Skip to next line link.
+ 000377 B0E3 AA                      tax                 
+ 000378 B0E4 C8                      iny                 
+ 000379 B0E5 B1 5C                   lda (TMPTR3),y      
+ 000380 B0E7 86 5C                   stx TMPTR3         ; Save it and get hi byte
+ 000381 B0E9 85 5D                   sta TMPTR3+1       ;  of next line number.
+ 000382 B0EB B1 5C                   lda (TMPTR3),y     ;  (for End-Of-Program test)
+ 000383 B0ED 60                      rts                
+ 000384                  
+ 000385 B0EE 18          CHKNUM      clc                ; Check for line number.
+ 000386 B0EF 98                      tya                ; Update pointers into BASIC
+ 000387 B0F0 65 5C                   adc TMPTR3         ;  text.
+ 000388 B0F2 85 77                   sta TXTPTR          
+ 000389 B0F4 85 57                   sta TMPTR2          
+ 000390 B0F6 A6 5D                   ldx TMPTR3+1        
+ 000391 B0F8 90 01                   bcc @F              
+ 000392 B0FA E8                      inx                 
+ 000393 B0FB 86 78       @           stx TXTPTR+1        
+ 000394 B0FD 86 58                   stx TMPTR2+1       
+ 000395 B0FF 20 70 00                jsr CHRGET         ; Now get next token.
+ 000396 B102 90 0A                   bcc @F             ; Branch if number.
+ 000397 B104 C9 AB                   cmp #TKNMIN        ; Is this a MINUS token?
+ 000398 B106 F0 36                   beq RNCHKNM        ; If yes, check for number.
+ 000399 B108 C9 A4                   cmp #TKNTO         ; Is this a TO token?
+ 000400 B10A D0 D0                   bne RNXTTKN        ;  (may follow GO token)
+ 000401 B10C F0 30                   beq RNCHKNM        ; If yes, check for number.
+ 000402 B10E 20 73 C8    @           jsr RD_INT         ; Get number from text.
+ 000403 B111 20 56 B1                jsr FNDMTCH        ; Scan for match.
+ 000404 B114 20 53 B2                jsr COPYPTR        ; Update BASIC text pointer.
+ 000405 B117 57                      .byte TMPTR2        
+ 000406 B118 77                      .byte TXTPTR        
+ 000407 B119 A2 00                   ldx #$00            
+ 000408 B11B A0 00                   ldy #$00            
+ 000409 B11D BD 01 01    CPYNUM      lda STKPAG+1,x     ; Copy ASCII line number
+ 000410 B120 F0 0F                   beq @F1            ;  into BASIC text, replacing
+ 000411 B122 48                      pha                ;  old line number reference.
+ 000412 B123 20 70 00                jsr CHRGET          
+ 000413 B126 90 03                   bcc @F              
+ 000414 B128 20 9D B1                jsr MVUP1          ; Open a gap in BASIC text
+ 000415 B12B 68          @           pla                ;  if needed to fit new
+ 000416 B12C 91 77                   sta (TXTPTR),y     ;  number in old space.
+ 000417 B12E E8                      inx                
+ 000418 B12F D0 EC                   bne CPYNUM          
+ 000419 B131 20 70 00    @           jsr CHRGET          
+ 000420 B134 20 76 00    @           jsr CHRGOT          
+ 000421 B137 B0 05                   bcs RNCHKNM         
+ 000422 B139 20 0A B2                jsr MVDN1          ; Close gap in BASIC if
+ 000423 B13C F0 F6                   beq @B             ;  needed.
+
+                              page 8
+
+ toolkit.cba   cbA65 v.1.00a, Feb 28 2008  -- Thu Mar 06 08:20:27 2008
+
+ "BASIC Programmer's Toolkit for Commodore Pet BASIC v2.0"
+
+ 000424 B13E AA          RNCHKNM     tax                ; See if we there is a number
+ 000425 B13F 38                      sec                ;  we need to check.
+ 000426 B140 A5 77                   lda TXTPTR          
+ 000427 B142 E5 5C                   sbc TMPTR3          
+ 000428 B144 A8                      tay                 
+ 000429 B145 8A                      txa                
+ 000430 B146 C9 2C                   cmp #','           
+ 000431 B148 F0 A4                   beq CHKNUM          
+ 000432 B14A C9 AB                   cmp #TKNMIN        
+ 000433 B14C F0 A0                   beq CHKNUM          
+ 000434 B14E C9 A4                   cmp #TKNTO         ; Is this a TO token?
+ 000435 B150 F0 9C                   beq CHKNUM         ;  (may follow GO token)
+ 000436 B152 AA                      tax                       
+ 000437 B153 4C BC B0                jmp RNCONT         ; Continue with next line.
+ 000438                  ;
+ 000439                  ;   Try to match line number reference to its line. Generate new
+ 000440                  ;   line number on the fly. If no line matches the reference, use
+ 000441                  ;   MAXLIN (63999).
+ 000442                  ;
+ 000443 B156 A5 82       FNDMTCH     lda LINNUM2        ; Set line start number.
+ 000444 B158 A6 83                   ldx LINNUM2+1      3 
+ 000445 B15A 85 80                   sta LINNUM1         
+ 000446 B15C 86 81                   stx LINNUM1+1       
+ 000447 B15E 20 53 B2                jsr COPYPTR        ; Make temporary BASIC
+ 000448 B161 28                      .byte BASPTR       ;  text pointer.
+ 000449 B162 21                      .byte TMPTR0        
+ 000450 B163 A0 03       CMPLIN      ldy #$03            
+ 000451 B165 B1 21                   lda (TMPTR0),y     ; Compare this line number
+ 000452 B167 C5 12                   cmp TMPINT+1       ;  to the reference.
+ 000453 B169 D0 18                   bne BMPLIN         ; If no match, skip to next
+ 000454 B16B 88                      dey                ;  line.
+ 000455 B16C B1 21                   lda (TMPTR0),y      
+ 000456 B16E C5 11                   cmp TMPINT          
+ 000457 B170 D0 11                   bne BMPLIN         
+ 000458                  ; Line number matches. Convert it to ASCII for insertion in text.
+ 000459                  ;
+ 000460 B172 A5 81       LN2ASC      lda LINNUM1+1       
+ 000461 B174 A6 80                   ldx LINNUM1         
+ 000462 B176 85 5F       RNINT2A     sta FACCM          ; Convert integer to f.p.
+ 000463 B178 86 60                   stx FACCM+1
+ 000464 B17A A2 90                   ldx #$90           ; Exponent for 2-byte integer.
+ 000465 B17C 38                      sec                
+ 000466 B17D 20 55 DB                jsr INT2FP          
+ 000467 B180 4C E9 DC                jmp FP2ASC         ; Convert f.p. to ASCII.
+ 000468                  ;
+ 000469                  ; Calculate new line number and skip to next line link.
+ 000470                  ;
+ 000471 B183 20 52 B0    BMPLIN      jsr NXTLIN         ; Update line number.
+ 000472 B186 A0 01                   ldy #$01            
+ 000473 B188 B1 21                   lda (TMPTR0),y     1 
+ 000474 B18A D0 06                   bne @F             ; If EOP use maximum
+ 000475 B18C A9 F9                   lda >MAXLIN        ;  line number.
+ 000476 B18E A2 FF                   ldx <MAXLIN         
+
+                              page 9
+
+ toolkit.cba   cbA65 v.1.00a, Feb 28 2008  -- Thu Mar 06 08:20:27 2008
+
+ "BASIC Programmer's Toolkit for Commodore Pet BASIC v2.0"
+
+ 000477 B190 D0 E4                   bne RNINT2A        ; Branch always.
+ 000478 B192 AA          @           tax                 
+ 000479 B193 88                      dey                 
+ 000480 B194 B1 21                   lda (TMPTR0),y      
+ 000481 B196 86 22                   stx TMPTR0+1        
+ 000482 B198 85 21                   sta TMPTR0          
+ 000483 B19A 4C 63 B1                jmp CMPLIN         ; Check new line for match.
+ 000484                  ;
+ 000485                  ;  Move BASIC text up one byte. Adjust pointers.
+ 000486                  ;
+ 000487 B19D 86 87       MVUP1       stx SAVEX          ; Start at top of BASIC text.
+ 000488 B19F A6 2A                   ldx VARPTR          
+ 000489 B1A1 A4 2B                   ldy VARPTR+1       ; Initialize text pointers.
+ 000490 B1A3 86 55                   stx TMPTR1          
+ 000491 B1A5 84 56                   sty TMPTR1+1        
+ 000492 B1A7 E8                      inx
+ 000493 B1A8 D0 01                   bne @F             
+ 000494 B1AA C8                      iny                 
+ 000495 B1AB 38          @           sec                ; Check available memory
+ 000496 B1AC 8A                      txa                ;  for room to expand.
+ 000497 B1AD E5 34                   sbc MEMSZ           
+ 000498 B1AF 98                      tya                 
+ 000499 B1B0 E5 35                   sbc MEMSZ+1        
+ 000500 B1B2 90 03                   bcc @F              
+ 000501 B1B4 4C 55 C3                jmp PRTERR         ; Error if no room to move. 
+ 000502 B1B7 84 2B       @           sty VARPTR+1        
+ 000503 B1B9 86 2A                   stx VARPTR          
+ 000504 B1BB A0 01                   ldy #$01            
+ 000505 B1BD A2 00                   ldx #$00            
+ 000506 B1BF A1 55       MVUPLP      lda (TMPTR1,x)     ; Move from top of text
+ 000507 B1C1 91 55                   sta (TMPTR1),y     ;  to current point.
+ 000508 B1C3 A5 55                   lda TMPTR1          
+ 000509 B1C5 D0 02                   bne @F              
+ 000510 B1C7 C6 56                   dec TMPTR1+1        
+ 000511 B1C9 C6 55       @           dec TMPTR1          
+ 000512 B1CB 38                      sec                ; Loop until we reach
+ 000513 B1CC A5 55                   lda TMPTR1         ;  current insertion point.
+ 000514 B1CE E5 77                   sbc TXTPTR          
+ 000515 B1D0 A5 56                   lda TMPTR1+1       
+ 000516 B1D2 E5 78                   sbc TXTPTR+1       
+ 000517 B1D4 B0 E9                   bcs MVUPLP         ; Loop termination control.
+ 000518 B1D6 08          TSTLNK      php                
+ 000519 B1D7 20 53 B2                jsr COPYPTR         
+ 000520 B1DA 5C                      .byte TMPTR3        
+ 000521 B1DB 57                      .byte TMPTR2       
+ 000522 B1DC 28                      plp                 
+ 000523 B1DD A0 01                   ldy #$01               
+ 000524 B1DF B1 57       CHKEOP      lda (TMPTR2),y     ; Check link for
+ 000525 B1E1 D0 04                   bne @F             ;  End-Of-Program.
+ 000526 B1E3 A6 87                   ldx SAVEX           
+ 000527 B1E5 88                      dey                ; If EOP, prepare for graceful
+ 000528 B1E6 60                      rts                ;  exit.
+ 000529                  ;
+
+                              page 10
+
+ toolkit.cba   cbA65 v.1.00a, Feb 28 2008  -- Thu Mar 06 08:20:27 2008
+
+ "BASIC Programmer's Toolkit for Commodore Pet BASIC v2.0"
+
+ 000530                  ;  Increment or decrement a line link. Put new value in program text
+ 000531                  ;  and in link pointer.
+ 000532                  ;
+ 000533 B1E7 AA          @           tax                  
+ 000534 B1E8 88                      dey                  
+ 000535 B1E9 B1 57                   lda (TMPTR2),y     ; Get link to x,y
+ 000536 B1EB A8                      tay                 
+ 000537 B1EC B0 06                   bcs @F             ; Calling routine uses carry
+ 000538 B1EE C8                      iny                ;  to invoke increment or 
+ 000539 B1EF D0 07                   bne SAVLNK         ;  decrement code.
+ 000540 B1F1 E8                      inx                 
+ 000541 B1F2 D0 04                   bne SAVLNK         ; Branch always.
+ 000542 B1F4 D0 01       @           bne @F              
+ 000543 B1F6 CA                      dex                 
+ 000544 B1F7 88          @           dey                 
+ 000545 B1F8 98          SAVLNK      tya                 
+ 000546 B1F9 A0 00                   ldy #$00           ; Save in text.
+ 000547 B1FB 91 57                   sta (TMPTR2),y      
+ 000548 B1FD 48                      pha                 
+ 000549 B1FE 8A                      txa
+ 000550 B1FF C8                      iny                
+ 000551 B200 91 57                   sta (TMPTR2),y      
+ 000552 B202 85 58                   sta TMPTR2+1       ; Save in pointer.
+ 000553 B204 68                      pla                 
+ 000554 B205 85 57                   sta TMPTR2          
+ 000555 B207 4C DF B1                jmp CHKEOP         1
+ 000556                  ;
+ 000557                  ;  Move BASIC text down one byte. Adjust pointers.
+ 000558                  ;
+ 000559 B20A A5 2A       MVDN1       lda VARPTR         
+ 000560 B20C D0 02                   bne @F              
+ 000561 B20E C6 2B                   dec VARPTR+1        
+ 000562 B210 C6 2A       @           dec VARPTR          
+ 000563 B212 20 53 B2                jsr COPYPTR         
+ 000564 B215 77                      .byte TXTPTR        
+ 000565 B216 55                      .byte TMPTR1        
+ 000566 B217 A0 01                   ldy #$01
+ 000567 B219 A2 00                   ldx #$00           
+ 000568 B21B B1 55       MVDNLP      lda (TMPTR1),y     ; Loop from current insertion
+ 000569 B21D 81 55                   sta (TMPTR1,x)     ;  point to end of BASIC text.
+ 000570 B21F E6 55                   inc TMPTR1          
+ 000571 B221 D0 02                   bne @F              
+ 000572 B223 E6 56                   inc TMPTR1+1        
+ 000573 B225 38          @           sec                 
+ 000574 B226 A5 55                   lda TMPTR1          
+ 000575 B228 E5 2A                   sbc VARPTR          
+ 000576 B22A A5 56                   lda TMPTR1+1        
+ 000577 B22C E5 2B                   sbc VARPTR+1        
+ 000578 B22E 90 EB                   bcc MVDNLP         ; Loop termination control. 
+ 000579 B230 B0 A4                   bcs TSTLNK         ; Branch always.
+ 000580                  ;
+ 000581                  ; These are the BASIC tokens for keywords which precede line numbers.
+ 000582                  ; Used by RENUMBER to correct all references to lines.
+
+                              page 11
+
+ toolkit.cba   cbA65 v.1.00a, Feb 28 2008  -- Thu Mar 06 08:20:27 2008
+
+ "BASIC Programmer's Toolkit for Commodore Pet BASIC v2.0"
+
+ 000583                  ;
+ 000584 B232 9B          TKNLST      .byte $9B          ; LIST  token
+ 000585 B233 8A                      .byte $8A          ; RUN     "
+ 000586 B234 A7                      .byte $A7          ; THEN    "
+ 000587 B235 89                      .byte $89          ; GOTO    "
+ 000588 B236 8D                      .byte $8D          ; GOSUB   "
+ 000589 B237 CB                      .byte $CB          ; GO      "   (followed by TO)
+ 000590                  
+ 000591 B238 20 03 B0    LINERR      jsr INITVAR        ; Line number exceeds limit.
+ 000592 B23B A9 45                   lda <RNGERR        ; Print "?OUT OF RANGE"
+ 000593 B23D A0 B2                   ldy >RNGERR         
+ 000594 B23F 20 1C CA                jsr PUT_STRING      
+ 000595 B242 4C 77 C3                jmp ERRMSG          
+ 000596 B245 3F 4F 55 54 RNGERR      .strz '?OUT OF RANGE'
+        B249 20 4F 46 20 
+        B24D 52 41 4E 47 
+        B251 45 00 
+ 000597                  ;
+ 000598                  ;   Move pointer from one z.p. location to another.
+ 000599                  ;   Pointer locations follow the calling routines JSR COPYPTR code.
+ 000600                  ;
+ 000601 B253 18          COPYPTR     clc                ; Get calling routine return
+ 000602 B254 68                      pla                ;  address and save in PTR1.
+ 000603 B255 85 84                   sta TMPTR4          
+ 000604 B257 69 02                   adc #$02           ; Bump return address to skip
+ 000605 B259 AA                      tax                ;  over two bytes and push
+ 000606 B25A 68                      pla                ;  back on stack.
+ 000607 B25B 85 85                   sta TMPTR4+1        
+ 000608 B25D 69 00                   adc #$00            
+ 000609 B25F 48                      pha                 
+ 000610 B260 8A                      txa                
+ 000611 B261 48                      pha                 
+ 000612 B262 A0 01                   ldy #$01           ; Get address of ptr1 to x...
+ 000613 B264 B1 84                   lda (TMPTR4),y      
+ 000614 B266 AA                      tax
+ 000615 B267 C8                      iny                
+ 000616 B268 B1 84                   lda (TMPTR4),y      
+ 000617 B26A A8                      tay                ; ...and ptr2 to y.
+ 000618 B26B B5 00                   lda $00,x          ; Now move pointer.
+ 000619 B26D 99 00 00                sta $0000,y         
+ 000620 B270 B5 01                   lda $01,x           
+ 000621 B272 99 01 00                sta $0001,y         
+ 000622 B275 60                      rts                
+ 000623                  
+ 000624 B276 A9 28       SETBAS      lda <BASPTR        ; Set TMPTR3 to point to
+ 000625 B278 85 5C                   sta TMPTR3         ;  start of BASIC pointer.
+ 000626 B27A A2 00                   ldx >BASPTR        ; This causes first link
+ 000627 B27C 86 5D                   stx TMPTR3+1       ;  skip to point to start
+ 000628 B27E 60                      rts                ;  of BASIC.
+ 000629                  
+ 000630 B27F A2 07       INITROM     ldx #$07           ; Initialize Toolkit ROM.
+ 000631 B281 BD 92 B2    @           lda WEDGE-1,x      ; Gopy 'wedge' to CHRGET
+ 000632 B284 95 78                   sta TXTPTR+1,x     ;  following TXTPTR.
+
+                              page 12
+
+ toolkit.cba   cbA65 v.1.00a, Feb 28 2008  -- Thu Mar 06 08:20:27 2008
+
+ "BASIC Programmer's Toolkit for Commodore Pet BASIC v2.0"
+
+ 000633 B286 CA                      dex                 
+ 000634 B287 D0 F8                   bne @B              
+ 000635 B289 A9 DE                   lda <CPYRT         ; Display PAICs copyright
+ 000636 B28B A0 B7                   ldy >CPYRT         ;  notice.
+ 000637 B28D 20 1C CA                jsr PUT_STRING      
+ 000638 B290 4C 03 B0                jmp INITVAR        ; Initialize Toolkit vars.
+ 000639                  ;
+ 000640                  ;   'wedge' code for insertion in CHRGET routine
+ 000641                  ;
+ 000642 B293 4C 9A B2    WEDGE       jmp TK_ENTRY       
+ 000643 B296 00                      brk                ; Location for MODE byte.
+ 000644 B297 4C C4 B2                jmp TK_CONT        
+ 000645                  ;
+ 000646                  ;  This is the entry point for the Toolkit 'wedge' code. Normal BASIC
+ 000647                  ;  calls to the CHRGET routine are intercepted to test for Toolkit
+ 000648                  ;  command processing. If no Toolkit action is performed, BASIC is
+ 000649                  ;  continued.
+ 000650                  ;
+ 000651 B29A 48          TK_ENTRY    pha                ; Toolkit entry from CHRGET wedge.
+ 000652 B29B 86 87                   stx SAVEX          ; Save 'x' register for BASIC.
+ 000653 B29D A5 78                   lda TXTPTR+1       ; Test for direct mode:
+ 000654 B29F C9 02                   cmp >INBUFF        ;  - are we pointing into
+ 000655 B2A1 D0 08                   bne @F             ;    the BASIC buffer? ($02XX)
+ 000656 B2A3 A5 77                   lda TXTPTR          
+ 000657 B2A5 C9 00                   cmp <INBUFF        ;  - start of buffer? ($0200)
+ 000658 B2A7 F0 26                   beq SCNBUF         ; Branch if in Direct mode.  
+ 000659 B2A9 D0 04                   bne MODCHK         ; Branch always.
+ 000660 B2AB A5 77       @           lda TXTPTR          
+ 000661 B2AD 85 86                   sta TMPERR         ; We're in program space
+ 000662 B2AF A5 7C       MODCHK      lda MODE           ; Check mode.
+ 000663 B2B1 F0 0A                   beq RTNBAS         ; Just continue if mode = OFF.
+ 000664 B2B3 C9 01                   cmp #AUTOM         ; Test for AUTO mode.
+ 000665 B2B5 D0 03                   bne @F              
+ 000666 B2B7 4C C1 B6                jmp CHKAUTO        ; Try AUTO function.
+ 000667 B2BA 4C E5 B4    @           jmp STPTRC         ; Must be STEP or TRACE.
+ 000668 B2BD A6 87       RTNBAS      ldx SAVEX          ; Restore 'x' register.
+ 000669 B2BF 68                      pla                ; Get saved character
+ 000670 B2C0 C9 3A                   cmp #'9'+1         ;  and set up for a
+ 000671 B2C2 B0 0A                   bcs TK_EX          ;  return to BASIC.
+ 000672 B2C4 C9 20       TK_CONT     cmp #' '           ; Continue with BASIC.
+ 000673 B2C6 D0 03                   bne @F             ; Skip spaces.
+ 000674 B2C8 4C 70 00                jmp CHRGET          
+ 000675 B2CB 4C 0A E1    @           jmp NUMCHK         ; Clear carry if number.
+ 000676 B2CE 60          TK_EX       rts                 
+ 000677                  
+ 000678 B2CF BA          SCNBUF      tsx                ; Start scan of BASIC buffer.
+ 000679 B2D0 BD 03 01                lda STKPAG+3,x     ; Check previous caller loc.
+ 000680 B2D3 C9 C3                   cmp #BASPG         ; BASIC direct mode?
+ 000681 B2D5 D0 D8                   bne MODCHK         ; IF not, check mode byte.
+ 000682 B2D7 A0 00                   ldy #$00           ; ELSE scan buffer.
+ 000683 B2D9 84 05                   sty COUNT          
+ 000684                  ;
+ 000685                  ;   Scan the BASIC input buffer (in direct mode) and test the character
+
+                              page 13
+
+ toolkit.cba   cbA65 v.1.00a, Feb 28 2008  -- Thu Mar 06 08:20:27 2008
+
+ "BASIC Programmer's Toolkit for Commodore Pet BASIC v2.0"
+
+ 000686                  ;   string for a match with one of the Toolkit commands. The count of the
+ 000687                  ;   found command is used to index into a jump table, (TKADDRHI & TKADDRLO)
+ 000688                  ;
+ 000689 B2DB A2 FF       FNDCMD      ldx #$FF            
+ 000690 B2DD E8          @           inx                ; Scan buffer.
+ 000691 B2DE BD 00 02                lda INBUFF,x        
+ 000692 B2E1 30 CC                   bmi MODCHK          
+ 000693 B2E3 C9 20                   cmp #' '            
+ 000694 B2E5 F0 F6                   beq @B             ; Skip spaces.
+ 000695 B2E7 B9 1A B3    CMDLP       lda CMDLIST,y      ; Get next character from 
+ 000696 B2EA F0 C3                   beq MODCHK         ;  list of Toolkit cmds.
+ 000697 B2EC 5D 00 02                eor INBUFF,x        
+ 000698 B2EF D0 04                   bne @F              
+ 000699 B2F1 C8                      iny                ; Bump indices on every 
+ 000700 B2F2 E8                      inx                ;    matched character.
+ 000701 B2F3 10 F2                   bpl CMDLP           
+ 000702 B2F5 C9 80       @           cmp #$80           ; Accept keyword if mismatch
+ 000703 B2F7 F0 0A                   beq GOTTKN         ;    is caused by terminator.
+ 000704 B2F9 C8          @           iny                ; Otherwise skip characters
+ 000705 B2FA B9 19 B3                lda CMDLIST-1,y    ;    to next keyword. 
+ 000706 B2FD 10 FA                   bpl @B              
+ 000707 B2FF E6 05                   inc COUNT          ; Update keyword counter.
+ 000708 B301 D0 D8                   bne FNDCMD         ; Branch always (try next cmd).
+ 000709 B303 E6 77       GOTTKN      inc TXTPTR         ; Bump TXTPTR past this
+ 000710 B305 CA                      dex                ;  keyword. No need to bump
+ 000711 B306 D0 FB                   bne GOTTKN         ;  high byte (always $02).
+ 000712 B308 A6 05                   ldx COUNT           
+ 000713 B30A E0 02                   cpx #$02            
+ 000714 B30C 30 02                   bmi @F              
+ 000715 B30E 68                      pla                 
+ 000716 B30F 68                      pla                 
+ 000717 B310 68          @           pla                 
+ 000718 B311 BD 4E B3                lda TKADDRHI,x     ; Execute Toolkit command.
+ 000719 B314 48                      pha                 
+ 000720 B315 BD 59 B3                lda TKADDRLO,x      
+ 000721 B318 48                      pha                 
+ 000722 B319 60                      rts                
+ 000723                  ;
+ 000724                  ; This is the Toolkit keyword (command) list. The last character in each
+ 000725                  ; string has the high bit set to facilitate keyword counting.
+ 000726                  ;
+ 000727 B31A 52 55 CE    CMDLIST     .strx 'RUN'          
+ 000728 B31D 41 55 54 CF             .strx 'AUTO'       
+ 000729 B321 53 54 45 D0             .strx 'STEP'        
+ 000730 B325 54 52 41 43             .strx 'TRACE'      
+        B329 C5 
+ 000731 B32A 4F 46 C6                .strx 'OFF'
+ 000732 B32D 52 45 4E 55             .strx 'RENUMBER'   
+        B331 4D 42 45 D2 
+ 000733 B335 44 45 4C 45             .strx 'DELETE'      
+        B339 54 C5 
+ 000734 B33B 48 45 4C D0             .strx 'HELP'        
+ 000735 B33F 46 49 4E C4             .strx 'FIND'        
+
+                              page 14
+
+ toolkit.cba   cbA65 v.1.00a, Feb 28 2008  -- Thu Mar 06 08:20:27 2008
+
+ "BASIC Programmer's Toolkit for Commodore Pet BASIC v2.0"
+
+ 000736 B343 44 55 4D D0             .strx 'DUMP'        
+ 000737 B347 41 50 50 45             .strx 'APPEND'     
+        B34B 4E C4 
+ 000738 B34D 00                      .byte $00          
+ 000739                  ;
+ 000740                  ;   Toolkit command dispatch table. The Toolkit commands are
+ 000741                  ;   preceded with an underscore to facilitate browsing the
+ 000742                  ;   program source code.
+ 000743                  ;
+ 000744                  ;   high bytes of Toolkit routine entry points
+ 000745                  ;
+ 000746 B34E B3          TKADDRHI    .byte >(RUN-1)     ; RUN 
+ 000747 B34F B6                      .byte >(_AUTO-1)   ; AUTO
+ 000748 B350 B4                      .byte >(_STEP-1)   ; STEP
+ 000749 B351 B4                      .byte >(_TRACE-1)  ; TRACE
+ 000750 B352 B4                      .byte >(_OFF-1)    ; OFF
+ 000751 B353 B0                      .byte >(_RENUM-1)  ; RENUMBER
+ 000752 B354 B5                      .byte >(_DELETE-1) ; DELETE
+ 000753 B355 B6                      .byte >(_HELP-1)   ; HELP
+ 000754 B356 B3                      .byte >(_FIND-1)   ; FIND
+ 000755 B357 B7                      .byte >(_DUMP-1)   ; DUMP
+ 000756 B358 B4                      .byte >(_APPEND-1) ; APPEND
+ 000757                  ;
+ 000758                  ;   low bytes of Toolkit routine entry points
+ 000759                  ;
+ 000760 B359 63          TKADDRLO    .byte <(RUN-1)     ; RUN
+ 000761 B35A B3                      .byte <(_AUTO-1)   ; AUTO
+ 000762 B35B DD                      .byte <(_STEP-1)   ; STEP
+ 000763 B35C DA                      .byte <(_TRACE-1)  ; TRACE
+ 000764 B35D D7                      .byte <(_OFF-1)    ; OFF
+ 000765 B35E 65                      .byte <(_RENUM-1)  ; RENUMBER
+ 000766 B35F 88                      .byte <(_DELETE-1) ; DELETE
+ 000767 B360 39                      .byte <(_HELP-1)   ; HELP
+ 000768 B361 86                      .byte <(_FIND-1)   ; FIND
+ 000769 B362 0D                      .byte <(_DUMP-1)   ; DUMP
+ 000770 B363 3E                      .byte <(_APPEND-1) ; APPEND
+ 000771                  ;
+ 000772                  ;       NOTE: RUN is not really a Toolkit command. However, it is
+ 000773                  ;       necessary to intercept the BASIC RUN command in order to
+ 000774                  ;       perform some Toolkit housekeeping.
+ 000775                  ;
+ 000776 B364 A2 0E       RUN         ldx #$0E           ; Intercept RUN command.
+ 000777 B366 A9 FF                   lda #$FF           ; Fill line TRACE buffer
+ 000778 B368 9D E3 03    @           sta LNBUFF-1,x     ;  with invalid numbers.
+ 000779 B36B CA                      dex                 
+ 000780 B36C D0 FA                   bne @B              
+ 000781 B36E A2 00                   ldx #$00            
+ 000782 B370 86 77                   stx TXTPTR          
+ 000783 B372 48                      pha                 
+ 000784 B373 4C BD B2                jmp RTNBAS         ; Continue with BASIC
+ 000785 B376 0D          APPENDMSG   .byte CR            
+ 000786 B377 41 50 50 45             .strz 'APPENDING'  
+        B37B 4E 44 49 4E 
+                              page 15
+
+ toolkit.cba   cbA65 v.1.00a, Feb 28 2008  -- Thu Mar 06 08:20:27 2008
+
+ "BASIC Programmer's Toolkit for Commodore Pet BASIC v2.0"
+
+
+        B37F 47 00 
+ 000787 B381 4C 81 B0    XTTLKT      jmp GO_BAS          
+ 000788 B384 4C 03 CE    FNDERR      jmp SYNERR         
+ 000789                  ;
+ 000790                  ;       FIND
+ 000791                  ;
+ 000792                  ;   Find a BASIC variable or keyword
+ 000793                  ;
+ 000794 B387 20 70 00    _FIND       jsr CHRGET          
+ 000795 B38A C9 01                   cmp #$01           ; Trap for tokens and EOL.
+ 000796 B38C 30 F6                   bmi FNDERR          
+ 000797 B38E C9 2C                   cmp #','           ; Trap for missing argument.
+ 000798 B390 F0 F2                   beq FNDERR          
+ 000799 B392 A2 00                   ldx #$00            
+ 000800 B394 8E E0 03                stx SAFTMP1         
+ 000801 B397 C9 22                   cmp #'"'            
+ 000802 B399 F0 09                   beq @F              
+ 000803 B39B 20 95 C4                jsr LOOKUP         ; Tokenize keyword, if any.
+ 000804 B39E 20 70 00                jsr CHRGET         
+ 000805 B3A1 4C B1 B3                jmp SAVIDX         
+ 000806 B3A4 CE E0 03    @           dec SAFTMP1         
+ 000807 B3A7 20 70 00                jsr CHRGET          
+ 000808 B3AA AA                      tax                 
+ 000809 B3AB F0 D7                   beq FNDERR         ; NULL (end-of-line)?
+ 000810 B3AD C9 22                   cmp #'"'            
+ 000811 B3AF F0 D3                   beq FNDERR         ; Empty string?
+ 000812 B3B1 A5 77       SAVIDX      lda TXTPTR         ; Save index into text.
+ 000813 B3B3 85 09                   sta FLAG1           
+ 000814 B3B5 20 70 00    @           jsr CHRGET         ; Scan to EOL or delimiter. 
+ 000815 B3B8 AA                      tax                 
+ 000816 B3B9 F0 07                   beq SRCHPRM         
+ 000817 B3BB C9 2C                   cmp #','            
+ 000818 B3BD D0 F6                   bne @B              
+ 000819 B3BF 20 70 00                jsr CHRGET          
+ 000820 B3C2 20 D7 B5    SRCHPRM     jsr GETRNG         ; Get search range.
+ 000821 B3C5 C9 00                   cmp #$00            
+ 000822 B3C7 D0 BB                   bne FNDERR          
+ 000823 B3C9 20 53 B2                jsr COPYPTR         
+ 000824 B3CC 55                      .byte TMPTR1        
+ 000825 B3CD 5C                      .byte TMPTR3        
+ 000826 B3CE 90 05                   bcc @F              
+ 000827 B3D0 20 DF B0    FNDLP       jsr SKPLNK          
+ 000828 B3D3 F0 AC                   beq XTTLKT         ; If EOP, exit to BASIC.
+ 000829 B3D5 38          @           sec                ; Check to see if we are
+ 000830 B3D6 A0 02                   ldy #$02           ;  beyond the search range.
+ 000831 B3D8 A5 11                   lda TMPINT          
+ 000832 B3DA F1 5C                   sbc (TMPTR3),y     
+ 000833 B3DC A5 12                   lda TMPINT+1
+ 000834 B3DE C8                      iny                
+ 000835 B3DF F1 5C                   sbc (TMPTR3),y     
+ 000836 B3E1 90 9E                   bcc XTTLKT         ; IF beyond range, return.
+ 000837 B3E3 A0 04                   ldy #$04           ; ELSE keep going.
+ 000838 B3E5 98                      tya                 
+
+                              page 16
+
+ toolkit.cba   cbA65 v.1.00a, Feb 28 2008  -- Thu Mar 06 08:20:27 2008
+
+ "BASIC Programmer's Toolkit for Commodore Pet BASIC v2.0"
+
+ 000839 B3E6 4D E0 03                eor SAFTMP1         
+ 000840 B3E9 85 87                   sta SAVEX          
+ 000841 B3EB B1 5C       SCNCHR      lda (TMPTR3),y     ; Get next character.
+ 000842 B3ED F0 E1                   beq FNDLP          ; Do next line if EOL.
+ 000843 B3EF C9 22                   cmp #'"'           ; Toggle 'in-string' flag.
+ 000844 B3F1 D0 08                   bne @F              
+ 000845 B3F3 A5 87                   lda SAVEX           
+ 000846 B3F5 49 FF                   eor #$FF            
+ 000847 B3F7 85 87                   sta SAVEX           
+ 000848 B3F9 D0 3E                   bne BMPTR          ; Flag fixed, do next char.
+ 000849 B3FB 24 87       @           bit SAVEX          
+ 000850 B3FD 30 3A                   bmi BMPTR           
+ 000851 B3FF A6 09                   ldx FLAG1           
+ 000852 B401 8C E1 03                sty SAFTMP2         
+ 000853 B404 BD 00 02    CHKCHR      lda INBUFF,x       ; Main loop to find variable
+ 000854 B407 F0 17                   beq FNDIT          ;  in text. 'x' indexes
+ 000855 B409 C9 22                   cmp #'"'           ;  the desired variable,
+ 000856 B40B F0 13                   beq FNDIT          ;  'y' indexes BASIC text.
+ 000857 B40D D1 5C                   cmp (TMPTR3),y     
+ 000858 B40F F0 0B                   beq @F              
+ 000859 B411 C9 2C                   cmp #','            
+ 000860 B413 D0 21                   bne GETYIDX         
+ 000861 B415 AD E0 03                lda SAFTMP1         
+ 000862 B418 F0 06                   beq FNDIT           
+ 000863 B41A D0 1A                   bne GETYIDX        ; Reset to start of var.
+ 000864 B41C E8          @           inx                ; Bump pointers to next
+ 000865 B41D C8                      iny                ;  character to match.
+ 000866 B41E D0 E4                   bne CHKCHR          
+ 000867 B420 20 E1 FF    FNDIT       jsr STOPKEY        ; Check for STOP key and
+ 000868 B423 A0 02                   ldy #$02           ;  then list current line.
+ 000869 B425 84 86                   sty TMPERR          
+ 000870 B427 B1 5C                   lda (TMPTR3),y      
+ 000871 B429 AA                      tax                 
+ 000872 B42A C8                      iny                 
+ 000873 B42B B1 5C                   lda (TMPTR3),y      
+ 000874 B42D 20 D9 DC                jsr PRTINT         ; Print integer in a,x.
+ 000875 B430 20 61 B6                jsr LSTLIN          
+ 000876 B433 4C D0 B3                jmp FNDLP           
+ 000877 B436 AC E1 03    GETYIDX     ldy SAFTMP2         
+ 000878 B439 C8          BMPTR       iny                 
+ 000879 B43A D0 AF                   bne SCNCHR         ; Check another char.
+ 000880 B43C 4C 03 CE                jmp SYNERR         ; (Should never get here.)
+ 000881                  ;
+ 000882                  ;       APPEND
+ 000883                  ;
+ 000884                  ;   Append tape program to end of resident BASIC program. Line numbers
+ 000885                  ;   can be reconciled by calling RENUMBER after successful completion.
+ 000886                  ;
+ 000887 B43F 20 70 00    _APPEND     jsr CHRGET         
+ 000888 B442 20 95 C4                jsr LOOKUP         ; TOKENIZE
+ 000889 B445 20 70 00                jsr CHRGET          
+ 000890 B448 A9 00                   lda #$00            
+ 000891 B44A 85 9D                   sta LDVERF          
+
+                              page 17
+
+ toolkit.cba   cbA65 v.1.00a, Feb 28 2008  -- Thu Mar 06 08:20:27 2008
+
+ "BASIC Programmer's Toolkit for Commodore Pet BASIC v2.0"
+
+ 000892 B44C 20 3E F4                jsr GETPARM         
+ 000893 B44F A5 D4                   lda DEVID           
+ 000894 B451 D0 03                   bne @F             
+ 000895 B453 4C 03 CE    BADAPP      jmp SYNERR         ; Exit if bad parameters.
+ 000896 B456 C9 03       @           cmp #$03               
+ 000897 B458 B0 F9                   bcs BADAPP         
+ 000898 B45A 20 56 F6                jsr SET_BUFF       ; Initialize tape buffer ptr.
+ 000899 B45D 20 12 F8                jsr WT_PLAY        ; Wait for PLAY switch and
+ 000900 B460 20 0A F4                jsr PRTSRCH        ;  show SEARCHING msg.
+ 000901 B463 A5 D1                   lda FNLEN          ; Get length of filename.
+ 000902 B465 F0 08                   beq SEARCH         ; IF zero, do search for any. 
+ 000903 B467 20 94 F4                jsr GETHDR         ; ELSE search for this file.
+ 000904 B46A D0 08                   bne GOT_HDR         
+ 000905 B46C 4C 6E F5    NOTFOUND    jmp PRTFNF         ; Print FILE NOT FOUND msg.
+ 000906 B46F 20 A6 F5    SEARCH      jsr SRCH_HDR        
+ 000907 B472 F0 F8                   beq NOTFOUND       
+ 000908 B474 20 3C F6    GOT_HDR     jsr RD_HDR          
+ 000909 B477 38                      sec                ; Header found. Now calculate
+ 000910 B478 A5 C9                   lda TAPTMP2        ;  size of program to append.
+ 000911 B47A E5 C7                   sbc TAPTMP1         
+ 000912 B47C 85 86                   sta TMPTR5          
+ 000913 B47E A5 CA                   lda TAPTMP2+1       
+ 000914 B480 E5 C8                   sbc TAPTMP1+1       
+ 000915 B482 85 87                   sta TMPTR5+1        
+ 000916 B484 20 C8 B7                jsr RSTVARP        ; Reset pointer to variables
+ 000917 B487 A6 5D                   ldx TMPTR3+1        
+ 000918 B489 A4 5C                   ldy TMPTR3          
+ 000919 B48B D0 01                   bne @F              
+ 000920 B48D CA                      dex                 
+ 000921 B48E 88          @           dey                
+ 000922 B48F 98                      tya                 
+ 000923 B490 A0 01                   ldy #$01            
+ 000924 B492 18                      clc
+ 000925 B493 65 C7                   adc TAPTMP1        
+ 000926 B495 90 01                   bcc @F              
+ 000927 B497 E8                      inx                 
+ 000928 B498 18          @           clc                ; Determine whether new program
+ 000929 B499 91 D6                   sta (TAPBUFF),y    ;  will fit in memory.
+ 000930 B49B 65 86                   adc TMPTR5          
+ 000931 B49D 85 C9                   sta TAPTMP2         
+ 000932 B49F 8A                      txa
+ 000933 B4A0 C8                      iny                
+ 000934 B4A1 91 D6                   sta (TAPBUFF),y     
+ 000935 B4A3 65 87                   adc TMPTR5+1        
+ 000936 B4A5 85 CA                   sta TAPTMP2+1       
+ 000937 B4A7 38                      sec                ; Use pointers to compare block
+ 000938 B4A8 A5 C9                   lda TAPTMP2        ;  starts and ends. 
+ 000939 B4AA C8                      iny                 
+ 000940 B4AB 91 D6                   sta (TAPBUFF),y     
+ 000941 B4AD E5 34                   sbc MEMSZ           
+ 000942 B4AF A5 CA                   lda TAPTMP2+1       
+ 000943 B4B1 C8                      iny                 
+ 000944 B4B2 91 D6                   sta (TAPBUFF),y     
+
+                              page 18
+
+ toolkit.cba   cbA65 v.1.00a, Feb 28 2008  -- Thu Mar 06 08:20:27 2008
+
+ "BASIC Programmer's Toolkit for Commodore Pet BASIC v2.0"
+
+ 000945 B4B4 E5 35                   sbc MEMSZ+1         
+ 000946 B4B6 90 03                   bcc @F              
+ 000947 B4B8 4C 55 C3                jmp PRTERR         ; Bad fit. Complain to user.
+ 000948 B4BB A9 76       @           lda <APPENDMSG     ; Size OK.
+ 000949 B4BD A0 B3                   ldy >APPENDMSG      
+ 000950 B4BF 20 1C CA                jsr PUT_STRING     ; show "APPENDING" message
+ 000951 B4C2 20 3C F6                jsr RD_HDR         ; Read program in.
+ 000952 B4C5 20 5E F8                jsr RD_TAPE         
+ 000953 B4C8 20 E6 F8                jsr WT_IO           
+ 000954 B4CB A5 96                   lda STATUS         
+ 000955 B4CD F0 03                   beq @F              
+ 000956 B4CF 4C E6 F3                jmp PRTLOAD         
+ 000957 B4D2 4C EF F3    @           jmp PRTRDY          
+ 000958 B4D5 4C BD B2    MODEX       jmp RTNBAS         
+ 000959                  ;
+ 000960                  ;       OFF
+ 000961                  ;
+ 000962                  ;   Turn off AUTO, TRACE or STEP modes.
+ 000963                  ;
+ 000964 B4D8 A9 00       _OFF        lda #OFFM          ; Entry to turn OFF mode markers.
+ 000965 B4DA 2C                      .byte $2C          
+ 000966                  ;
+ 000967                  ;       TRACE   Turn on TRACE mode
+ 000968                  ;
+ 000969 B4DB A9 02       _TRACE      lda #TRACEM        ; Entry to turn on TRACE.
+ 000970 B4DD 2C                      .byte $2C          
+ 000971                  ;
+ 000972                  ;       STEP    Turn on STEP mode
+ 000973                  ;
+ 000974 B4DE A9 03       _STEP       lda #STEPM         ; Set appropriate mode and...
+ 000975 B4E0 85 7C                   sta MODE            
+ 000976 B4E2 4C 81 B0                jmp GO_BAS         ; ...go back to BASIC.
+ 000977                  
+ 000978 B4E5 A6 78       STPTRC      ldx TXTPTR+1       ; Are we in direct mode?
+ 000979 B4E7 E0 02                   cpx >INBUFF          
+ 000980 B4E9 F0 EA                   beq MODEX          ; Yes, turn OFF.
+ 000981 B4EB A5 37                   lda CURRLN+1       ; Check line number.
+ 000982 B4ED C9 FA                   cmp >(MAXLIN+1)    ; (max. line # is $F9FF)
+ 000983 B4EF 90 06                   bcc @F             ; Branch if valid line number 
+ 000984 B4F1 A9 00                   lda #OFFM          ;   otherwise turn OFF.
+ 000985 B4F3 85 7C                   sta MODE           
+ 000986 B4F5 F0 DE                   beq MODEX          
+ 000987 B4F7 A6 36       @           ldx CURRLN         ; Check for new line number.
+ 000988 B4F9 CD E5 03                cmp LNBUFF+1        
+ 000989 B4FC D0 05                   bne NEWLIN          
+ 000990 B4FE EC E4 03                cpx LNBUFF          
+ 000991 B501 F0 D2       BRLNK       beq MODEX          ; No change, do nothing.
+ 000992 B503 8D E5 03    NEWLIN      sta LNBUFF+1       ; OK, add to list.
+ 000993 B506 8E E4 03                stx LNBUFF          
+ 000994 B509 A2 0B                   ldx #$0B           
+ 000995 B50B BD E4 03    @           lda LNBUFF,x       ; Scroll TRACE line buffer
+ 000996 B50E 9D E6 03                sta TRCBUF,x       ;    up one line.
+ 000997 B511 CA                      dex                 
+
+                              page 19
+
+ toolkit.cba   cbA65 v.1.00a, Feb 28 2008  -- Thu Mar 06 08:20:27 2008
+
+ "BASIC Programmer's Toolkit for Commodore Pet BASIC v2.0"
+
+ 000998 B512 10 F7                   bpl @B              
+ 000999 B514 30 1F                   bmi TRDISP         ; Branch always.
+ 001000 B516 A5 7C       TSTMOD      lda MODE            
+ 001001 B518 C9 03                   cmp #STEPM         ; Are we in STEP mode?
+ 001002 B51A D0 09                   bne CHKSLO           
+ 001003 B51C 20 E1 FF    @           jsr STOPKEY        ; Yes, check for STOP.
+ 001004 B51F A5 98                   lda SHIFTKEY       ; STEP delay control uses
+ 001005 B521 F0 F9                   beq @B             ;  SHIFT KEY for trigger.
+ 001006 B523 D0 04                   bne LNGDLY         ; Use long delay.
+ 001007 B525 A5 98       CHKSLO      lda SHIFTKEY        
+ 001008 B527 D0 02                   bne @F             ; The delay control accounts 
+ 001009 B529 A9 FF       LNGDLY      lda #$FF           ;  for the possibility that
+ 001010 B52B A8          @           tay                ;  the user simply holds the
+ 001011 B52C AA          @           tax                ;  SHIFT KEY down.
+ 001012 B52D E8          @           inx
+ 001013 B52E D0 FD                   bne @B             ; Also used to slow down
+ 001014 B530 C8                      iny                ;  TRACE mode.
+ 001015 B531 D0 F9                   bne @B1            
+ 001016 B533 F0 CC                   beq BRLNK          ; Exit when delay complete.
+ 001017 B535 A2 05       TRDISP      ldx #$05           ; Put TRACE buffer on screen.
+ 001018 B537 BD 83 B5    DSPLP       lda SCROFF,x       ; Screen address in TMPTR1.
+ 001019 B53A 85 55                   sta TMPTR1          
+ 001020 B53C A9 80                   lda >SCREEN        
+ 001021 B53E 85 56                   sta TMPTR1+1        
+ 001022 B540 8A                      txa                
+ 001023 B541 0A                      asl                 
+ 001024 B542 A8                      tay                 
+ 001025 B543 86 87                   stx SAVEX           
+ 001026 B545 BE E6 03                ldx TRCBUF,y        
+ 001027 B548 B9 E7 03                lda TRCBUF+1,y      
+ 001028 B54B C9 FF                   cmp #$FF           ; Don't display invalid
+ 001029 B54D F0 21                   beq MKBLNK         ;  line numbers (num > $F9FF)
+ 001030 B54F 20 76 B1                jsr RNINT2A        ; Convert to ASCII.
+ 001031 B552 A0 00                   ldy #$00           
+ 001032 B554 A9 23                   lda #'#'           
+ 001033 B556 20 74 B5    @           jsr HILITE         ; Highlight the pound sign.
+ 001034 B559 B9 00 01                lda STKPAG,y
+ 001035 B55C D0 F8                   bne @B
+ 001036 B55E C0 06       @           cpy #$06            
+ 001037 B560 B0 07                   bcs @F              
+ 001038 B562 A9 20       BLNKIT      lda #' '            
+ 001039 B564 20 74 B5                jsr HILITE         ; Highlight the space.
+ 001040 B567 D0 F5                   bne @B              
+ 001041 B569 A6 87       @           ldx SAVEX           
+ 001042 B56B CA                      dex
+ 001043 B56C 10 C9                   bpl DSPLP          ; Do next display line.
+ 001044 B56E 30 A6                   bmi TSTMOD         ; Branch always.
+ 001045 B570 A0 00       MKBLNK      ldy #$00            
+ 001046 B572 F0 EE                   beq BLNKIT          
+ 001047 B574 09 80       HILITE      ora #$80           ; Reverse field (highlight).
+ 001048 B576 AA                      tax                 
+ 001049 B577 AD 40 E8    @           lda VIA            ; Wait for vertical blank
+ 001050 B57A 29 20                   and #VBLNK         ;  to avoid screen snow.
+
+                              page 20
+
+ toolkit.cba   cbA65 v.1.00a, Feb 28 2008  -- Thu Mar 06 08:20:27 2008
+
+ "BASIC Programmer's Toolkit for Commodore Pet BASIC v2.0"
+
+ 001051 B57C D0 F9                   bne @B             
+ 001052 B57E 8A                      txa                
+ 001053 B57F 91 55                   sta (TMPTR1),y     ; Put character on screen.
+ 001054 B581 C8                      iny                 
+ 001055 B582 60                      rts
+ 001056                  ;
+ 001057                  ;   Table of screen RAM offsets to upper right TRACE display
+ 001058                  ;   area. These are coded in reverse order where,
+ 001059                  ;
+ 001060                  ;    SCREEN LINE OFFSET
+ 001061                  ;    ------------------
+ 001062                  ;       $22 = 34          1ST LINE    (TOP)
+ 001063                  ;       $4A = 34+40       2ND LINE
+ 001064                  ;       $72 = 34+80       3RD LINE
+ 001065                  ;       $9A = 34+120      4TH LINE
+ 001066                  ;       $C2 = 34+160      5TH LINE
+ 001067                  ;       $EA = 34+200      6TH LINE    (BOTTOM)
+ 001068                  ;
+ 001069                  ;  The decision to provide 6 line numbers was at least
+ 001070                  ;  partially based on the desire to keep the offset to one
+ 001071                  ;  byte (OFFSET < 256).
+ 001072                  ;
+ 001073 B583 EA C2 9A 72 SCROFF      .byte $EA,$C2,$9A,$72,$4A,$22 
+        B587 4A 22 
+ 001074                  ;
+ 001075                  ;       DELETE    
+ 001076                  ;
+ 001077                  ;   Delete a range of lines in a BASIC program.
+ 001078                  ;
+ 001079                  ;
+ 001080 B589 20 70 00    _DELETE     jsr CHRGET         ; Delete range of line numbers
+ 001081 B58C 20 D7 B5                jsr GETRNG         ; Get parameters.
+ 001082 B58F F0 03                   beq @F              
+ 001083 B591 4C 03 CE                jmp SYNERR          
+ 001084 B594 20 2C C5    @           jsr FINDLINE       ; Get BASIC line from number
+ 001085 B597 90 0C                   bcc DLTLP          ;  in $11,$12.
+ 001086 B599 A0 00                   ldy #$00            
+ 001087 B59B B1 57                   lda (TMPTR2),y      
+ 001088 B59D AA                      tax                 
+ 001089 B59E C8                      iny                 
+ 001090 B59F B1 57                   lda (TMPTR2),y      
+ 001091 B5A1 85 58                   sta TMPTR2+1        
+ 001092 B5A3 86 57                   stx TMPTR2         
+ 001093 B5A5 A0 00       DLTLP       ldy #$00           ; Main DELETE loop. Move
+ 001094 B5A7 B1 57                   lda (TMPTR2),y     ;  text down to overwrite
+ 001095 B5A9 91 55                   sta (TMPTR1),y     ;  the deleted region.
+ 001096 B5AB E6 55                   inc TMPTR1          
+ 001097 B5AD D0 02                   bne @F              
+ 001098 B5AF E6 56                   inc TMPTR1+1        
+ 001099 B5B1 E6 57       @           inc TMPTR2          
+ 001100 B5B3 D0 02                   bne @F              
+ 001101 B5B5 E6 58                   inc TMPTR2+1        
+ 001102 B5B7 20 CC B5    @           jsr MOVTST          
+
+                              page 21
+
+ toolkit.cba   cbA65 v.1.00a, Feb 28 2008  -- Thu Mar 06 08:20:27 2008
+
+ "BASIC Programmer's Toolkit for Commodore Pet BASIC v2.0"
+
+ 001103 B5BA D0 E9                   bne DLTLP           
+ 001104 B5BC A5 55                   lda TMPTR1         ; Update start of variables
+ 001105 B5BE 85 2A                   sta VARPTR         ;  pointer. Variable values
+ 001106 B5C0 A5 56                   lda TMPTR1+1       ;  are abandoned.
+ 001107 B5C2 85 2B                   sta VARPTR+1        
+ 001108 B5C4 A0 AE                   ldy #RDY           ; Print READY. message
+ 001109 B5C6 20 56 F1                jsr PRTMON         ; and return to BASIC.
+ 001110 B5C9 4C 39 C4                jmp FIXLINKS       
+ 001111                  
+ 001112 B5CC A6 2A       MOVTST      ldx VARPTR         ; Move loop termination  
+ 001113 B5CE E4 57                   cpx TMPTR2         ;  test. Have we moved
+ 001114 B5D0 D0 04                   bne @F             ;  everybody below the
+ 001115 B5D2 A4 2B                   ldy VARPTR+1       ;  start of VARS?
+ 001116 B5D4 C4 58                   cpy TMPTR2+1        
+ 001117 B5D6 60          @           rts                
+ 001118                  ;
+ 001119                  ; Get a range of lines. Used by FIND and DELETE to
+ 001120                  ; parse two hyphen-separated integers.
+ 001121                  ;
+ 001122 B5D7 20 53 B2    GETRNG      jsr COPYPTR         
+ 001123 B5DA 28                      .byte BASPTR        
+ 001124 B5DB 55                      .byte TMPTR1        
+ 001125 B5DC 20 C8 B7                jsr RSTVARP        ; Reset pointer to BASIC vars.
+ 001126 B5DF 20 53 B2                jsr COPYPTR         
+ 001127 B5E2 5C                      .byte TMPTR3       
+ 001128 B5E3 57                      .byte TMPTR2        
+ 001129 B5E4 A2 FF                   ldx #$FF           ; Initialize line number
+ 001130 B5E6 86 12                   stx TMPINT+1       ;  and get 1st (or only)
+ 001131 B5E8 20 76 00                jsr CHRGOT         ;  parameter.
+ 001132 B5EB 90 0F                   bcc GETNUM1        
+ 001133 B5ED C9 2D       CHKMIN      cmp #'-'           ; Check for hyphen delimiter.
+ 001134 B5EF F0 04                   beq @F              
+ 001135 B5F1 C9 AB                   cmp #TKNMIN        
+ 001136 B5F3 D0 41                   bne GOTRNG              
+ 001137 B5F5 20 70 00    @           jsr CHRGET         ; Do 2nd parameter.
+ 001138 B5F8 90 22                   bcc GETNUM2         
+ 001139 B5FA B0 F1                   bcs CHKMIN          
+ 001140 B5FC 20 73 C8    GETNUM1     jsr RD_INT         ; Get line number and make 
+ 001141 B5FF 48                      pha                ;  a pointer to the line.
+ 001142 B600 20 2C C5                jsr FINDLINE        
+ 001143 B603 20 53 B2                jsr COPYPTR         
+ 001144 B606 5C                      .byte TMPTR3       
+ 001145 B607 55                      .byte TMPTR1
+ 001146 B608 68                      pla
+ 001147 B609 F0 19                   beq SETPTR         
+ 001148 B60B A2 FF                   ldx #$FF           
+ 001149 B60D 86 12                   stx TMPINT+1        
+ 001150 B60F C9 2D                   cmp #'-'           ; Look for 2nd parameter.
+ 001151 B611 F0 04                   beq @F              
+ 001152 B613 C9 AB                   cmp #TKNMIN        
+ 001153 B615 D0 1F                   bne GOTRNG          
+ 001154 B617 20 70 00    @           jsr CHRGET          
+ 001155 B61A B0 1A                   bcs GOTRNG
+
+                              page 22
+
+ toolkit.cba   cbA65 v.1.00a, Feb 28 2008  -- Thu Mar 06 08:20:27 2008
+
+ "BASIC Programmer's Toolkit for Commodore Pet BASIC v2.0"
+
+ 001156 B61C 20 73 C8    GETNUM2     jsr RD_INT         ; Make a pointer to the
+ 001157 B61F D0 15                   bne GOTRNG         ;  end of the range.
+ 001158 B621 20 2C C5                jsr FINDLINE        
+ 001159 B624 20 53 B2    SETPTR      jsr COPYPTR         
+ 001160 B627 5C                      .byte TMPTR3       
+ 001161 B628 57                      .byte TMPTR2
+ 001162 B629 38                      sec                ; Check range for validity.
+ 001163 B62A A5 57                   lda TMPTR2         ; Exit with Z=1 for OK.
+ 001164 B62C E5 55                   sbc TMPTR1         ; Z=0 otherwise.
+ 001165 B62E A5 58                   lda TMPTR2+1       
+ 001166 B630 E5 56                   sbc TMPTR1+1        
+ 001167 B632 90 03                   bcc BADPRM            
+ 001168 B634 A9 00                   lda #$00           ; Force state of carry to
+ 001169 B636 60          GOTRNG      rts                ;  proper value.
+ 001170 B637 A9 01       BADPRM      lda #$01            
+ 001171 B639 60                      rts                
+ 001172                  ;
+ 001173                  ;       HELP
+ 001174                  ;
+ 001175                  ;  List BASIC line in error and highlight point at which
+ 001176                  ;  error occurred. (May be off by one character.)
+ 001177                  ;
+ 001178 B63A A6 37       _HELP       ldx CURRLN+1       ; Make temporary pointer to
+ 001179 B63C 86 12                   stx TMPINT+1       ;  error line.
+ 001180 B63E E8                      inx                 
+ 001181 B63F F0 1D                   beq @F              
+ 001182 B641 A5 36                   lda CURRLN          
+ 001183 B643 85 11                   sta TMPINT          
+ 001184 B645 20 D5 DC                jsr PRTLIN         ; Print line number.
+ 001185 B648 A2 FF                   ldx #$FF           ; Disable current line with
+ 001186 B64A 86 37                   stx CURRLN+1       ;  invalid value.
+ 001187 B64C E8                      inx                 
+ 001188 B64D 86 7C                   stx MODE            
+ 001189 B64F 20 2C C5                jsr FINDLINE       ; Find BASIC line.
+ 001190 B652 38                      sec                     
+ 001191 B653 A5 86                   lda TMPERR          
+ 001192 B655 E5 5C                   sbc TMPTR3
+ 001193 B657 85 86                   sta TMPERR         
+ 001194 B659 C6 86                   dec TMPERR          
+ 001195 B65B 20 61 B6                jsr LSTLIN         ; List the line and go to
+ 001196 B65E 4C 89 C3    @           jmp RDYMSG         ;  BASIC READY. msg.
+ 001197                  
+ 001198                  ;
+ 001199                  ; List a BASIC line with highlight at error position.
+ 001200                  ; Position is location where parser gave up on evaluating
+ 001201                  ; a formula. It may be one character beyond the actual error.
+ 001202                  ;
+ 001203 B661 A0 03       LSTLIN      ldy #$03           ; Use COUNT for 'in-string'
+ 001204 B663 84 05                   sty COUNT          ;  flag.
+ 001205 B665 84 87                   sty SAVEX          
+ 001206 B667 A9 20                   lda #' '            
+ 001207 B669 A4 87       HLSTLP      ldy SAVEX           
+ 001208 B66B 29 7F                   and #POSMSK        ; Scrape off high bit.
+
+                              page 23
+
+ toolkit.cba   cbA65 v.1.00a, Feb 28 2008  -- Thu Mar 06 08:20:27 2008
+
+ "BASIC Programmer's Toolkit for Commodore Pet BASIC v2.0"
+
+ 001209 B66D 20 45 CA    HPRTLP      jsr PUTCHR         ; Print character.
+ 001210 B670 C9 22                   cmp #'"'           ; Are we starting a string?
+ 001211 B672 D0 06                   bne @F             
+ 001212 B674 A5 05                   lda COUNT          ; Toggle 'in string' flag.
+ 001213 B676 49 FF                   eor #$FF            
+ 001214 B678 85 05                   sta COUNT          
+ 001215 B67A A9 00       @           lda #$00            
+ 001216 B67C 85 9F                   sta REVFLG          
+ 001217 B67E C8                      iny
+ 001218 B67F C4 86                   cpy TMPERR         ; Reverse video at location
+ 001219 B681 D0 02                   bne @F             ;  of BASIC error.
+ 001220 B683 84 9F                   sty REVFLG          
+ 001221 B685 B1 5C       @           lda (TMPTR3),y      
+ 001222 B687 D0 03                   bne @F              
+ 001223 B689 4C DE C9                jmp PUT_CRLF       ; Print CR/LF and exit.
+ 001224 B68C 10 DF       @           bpl HPRTLP          
+ 001225 B68E C9 FF                   cmp #$FF            
+ 001226 B690 F0 DB                   beq HPRTLP          
+ 001227 B692 24 05                   bit COUNT           
+ 001228 B694 30 D7                   bmi HPRTLP         ; Continue through string.
+ 001229 B696 38                      sec                 
+ 001230 B697 E9 7F                   sbc #POSMSK        ; Convert to count value.
+ 001231 B699 AA                      tax                 
+ 001232 B69A 84 87                   sty SAVEX           
+ 001233 B69C A0 FF                   ldy #$FF            
+ 001234 B69E CA          KWDLP       dex                ; Find BASIC keyword.
+ 001235 B69F F0 08                   beq @F1            ; Exit when count complete.
+ 001236 B6A1 C8          @           iny                
+ 001237 B6A2 B9 92 C0                lda KWDLST,y        
+ 001238 B6A5 10 FA                   bpl @B             ; Skip over leading chars.
+ 001239 B6A7 30 F5                   bmi KWDLP          ; Branch always.
+ 001240 B6A9 C8          @           iny                ; Print BASIC keyword.
+ 001241 B6AA B9 92 C0                lda KWDLST,y        
+ 001242 B6AD 30 BA                   bmi HLSTLP         ; Loop back at end of kywd.
+ 001243 B6AF 20 45 CA                jsr PUTCHR          
+ 001244 B6B2 D0 F5                   bne @B             
+ 001245                  ;
+ 001246                  ;       AUTO
+ 001247                  ;
+ 001248                  ; AUTO is an automatic line numbering feature which
+ 001249                  ; relieves the the programmer from having to enter line
+ 001250                  ; numbers for each BASIC program line. It accepts line
+ 001251                  ; numbering parameters with the same syntax as RENUMBER.
+ 001252                  ;
+ 001253                  ; Once AUTO mode has been entered, the screen will
+ 001254                  ; generate and display consecutive line numbers with the
+ 001255                  ; cursor properly placed for typing in BASIC text.
+ 001256                  ;
+ 001257                  ; The strategy for implementing AUTO makes use of the
+ 001258                  ; PET interrupt driven keyboard handler. Line numbers
+ 001259                  ; are generated in ASCII format and copied into the PET
+ 001260                  ; keyboard buffer with the character count set. The
+ 001261                  ; operating system then handles the task of copying
+
+                              page 24
+
+ toolkit.cba   cbA65 v.1.00a, Feb 28 2008  -- Thu Mar 06 08:20:27 2008
+
+ "BASIC Programmer's Toolkit for Commodore Pet BASIC v2.0"
+
+ 001262                  ; the keyboard buffer to its destination.
+ 001263                  ;
+ 001264 B6B4 20 1A B0    _AUTO       jsr LINPARMS       ; Get line number parms. 
+ 001265 B6B7 20 F8 B6                jsr STUFFNUM       ; Output starting line number.
+ 001266 B6BA A9 01                   lda #AUTOM         ; Set mode marker for AUTO.
+ 001267 B6BC 85 7C                   sta MODE            
+ 001268 B6BE A9 00                   lda #$00           ; Trick BASIC into thinking
+ 001269 B6C0 60                      rts                ;  nothing happened.
+ 001270                  
+ 001271 B6C1 68          CHKAUTO     pla                
+ 001272 B6C2 48                      pha                 
+ 001273 B6C3 D0 09                   bne @F              
+ 001274 B6C5 A9 00                   lda #OFFM          ; End of line.
+ 001275 B6C7 85 7C                   sta MODE           ; Clear mode markers.
+ 001276 B6C9 85 9E                   sta NUMCHR
+ 001277 B6CB 4C BD B2    CNTBAS      jmp RTNBAS         
+ 001278 B6CE C9 20       @           cmp #' '           ; Weed out non-numeric
+ 001279 B6D0 F0 F9                   beq CNTBAS         ;  characters.
+ 001280 B6D2 C9 3A                   cmp #'9'+1          
+ 001281 B6D4 B0 04                   bcs @F              
+ 001282 B6D6 C9 30                   cmp #'0'            
+ 001283 B6D8 B0 F1                   bcs CNTBAS          
+ 001284 B6DA 38          @           sec                ; Check number for size
+ 001285 B6DB A5 11                   lda TMPINT         ;  and accept of OK.
+ 001286 B6DD A8                      tay                 
+ 001287 B6DE E5 80                   sbc LINNUM1         
+ 001288 B6E0 A5 12                   lda TMPINT+1        
+ 001289 B6E2 AA                      tax                
+ 001290 B6E3 E5 81                   sbc LINNUM1+1       
+ 001291 B6E5 90 0C                   bcc @F             
+ 001292 B6E7 84 80                   sty LINNUM1         
+ 001293 B6E9 86 81                   stx LINNUM1+1       
+ 001294 B6EB 20 52 B0                jsr NXTLIN         ; Update line number.
+ 001295 B6EE 90 03                   bcc @F             ; Line number too big!
+ 001296 B6F0 4C 38 B2                jmp LINERR         ; Print error msg and exit.
+ 001297                  
+ 001298 B6F3 20 F8 B6    @           jsr STUFFNUM        
+ 001299 B6F6 10 D3                   bpl CNTBAS         ; Branch always.
+ 001300 B6F8 20 72 B1    STUFFNUM    jsr LN2ASC         ; Convert number to ASCII.
+ 001301 B6FB A0 00                   ldy #$00           ; Stuff ASCII line number 
+ 001302 B6FD C8          @           iny                ;  into keyboard buffer.
+ 001303 B6FE B9 FF 00                lda STKPAG-1,y      
+ 001304 B701 99 6E 02                sta KEYBUFF-1,y     
+ 001305 B704 D0 F7                   bne @B              
+ 001306 B706 A9 20                   lda #' '           ; Add a space...
+ 001307 B708 99 6E 02                sta KEYBUFF-1,y     
+ 001308 B70B 84 9E                   sty NUMCHR         ; ...update number of chars
+ 001309 B70D 60                      rts                ;  and let system print it.
+ 001310                  ;
+ 001311                  ;      DUMP
+ 001312                  ;
+ 001313                  ; Scan through BASIC variables printing names and values
+ 001314                  ; to screen. Will print floating point, integer and string
+
+                              page 25
+
+ toolkit.cba   cbA65 v.1.00a, Feb 28 2008  -- Thu Mar 06 08:20:27 2008
+
+ "BASIC Programmer's Toolkit for Commodore Pet BASIC v2.0"
+
+ 001315                  ; variables. Does not handle arrays.
+ 001316                  ;
+ 001317 B70E 20 53 B2    _DUMP       jsr COPYPTR        ; Make a temporary pointer
+ 001318 B711 2A                      .byte VARPTR       ;  to BASIC variables.
+ 001319 B712 5C                      .byte TMPTR3        
+ 001320 B713 38          VARLOOP     sec                ; Process variables until
+ 001321 B714 A5 5C                   lda TMPTR3         ;  pointer moves up into 
+ 001322 B716 E5 2C                   sbc ARRPTR         ;  array storage
+ 001323 B718 A5 5D                   lda TMPTR3+1        
+ 001324 B71A E5 2D                   sbc ARRPTR+1        
+ 001325 B71C 90 03                   bcc @F             
+ 001326 B71E 4C 81 B0                jmp GO_BAS         ; Done! Return to BASIC
+ 001327 B721 A0 00       @           ldy #$00            
+ 001328 B723 84 87                   sty SAVEX
+ 001329 B725 C8                      iny                
+ 001330 B726 B1 5C       @           lda (TMPTR3),y     ; Scrape off high bits for
+ 001331 B728 0A                      asl                ;  variable type flag.
+ 001332 B729 26 87                   rol SAVEX           
+ 001333 B72B 4A                      lsr                 
+ 001334 B72C 99 42 00                sta VARNAM,y        
+ 001335 B72F 88                      dey                 
+ 001336 B730 10 F4                   bpl @B             ; Now check variable type. 
+ 001337 B732 A5 87                   lda SAVEX           
+ 001338 B734 F0 2B                   beq FPVAR          ; Branch if f.p. type.
+ 001339 B736 C9 01                   cmp #$01            
+ 001340 B738 F0 69                   beq NOTVAR         ; Unknown type, ignore.
+ 001341 B73A C9 02                   cmp #$02            
+ 001342 B73C F0 3E                   beq STRVAR         ; Branch if string variable.
+ 001343                  ;
+ 001344                  ;  Print an integer variable to the screen.
+ 001345                  ;
+ 001346 B73E 20 BB B7                jsr PRTNAM         ; Print integer name.
+ 001347 B741 A9 25                   lda #'%'                 
+ 001348 B743 20 45 CA                jsr PUTCHR          
+ 001349 B746 A9 3D                   lda #'='           ; Format display for 
+ 001350 B748 20 45 CA                jsr PUTCHR         ;  integer.
+ 001351 B74B A0 02                   ldy #$02            
+ 001352 B74D B1 5C                   lda (TMPTR3),y     ; Adjust pointer to point
+ 001353 B74F 48                      pha                ;  to integer value.
+ 001354 B750 C8                      iny                
+ 001355 B751 B1 5C                   lda (TMPTR3),y      
+ 001356 B753 A8                      tay                
+ 001357 B754 68                      pla                
+ 001358 B755 20 6D D2                jsr FX2FLT         ; Convert to float
+ 001359 B758 20 E9 DC                jsr FP2ASC         ;  then to ASCII
+ 001360 B75B 20 1C CA                jsr PUT_STRING     ;  and print it.
+ 001361 B75E 4C A0 B7                jmp BMPVAR         ; Do next variable.
+ 001362                  ;
+ 001363                  ;  Print a floating point variable to screen.
+ 001364                  ;
+ 001365 B761 20 BB B7    FPVAR       jsr PRTNAM         
+ 001366 B764 A9 3D                   lda #'='           
+ 001367 B766 20 45 CA                jsr PUTCHR          
+
+                              page 26
+
+ toolkit.cba   cbA65 v.1.00a, Feb 28 2008  -- Thu Mar 06 08:20:27 2008
+
+ "BASIC Programmer's Toolkit for Commodore Pet BASIC v2.0"
+
+ 001368 B769 20 69 D0                jsr LOCVAR         ; Get address of f.p. value.
+ 001369 B76C A5 44                   lda VARADR          
+ 001370 B76E A4 45                   ldy VARADR+1        
+ 001371 B770 20 AE DA                jsr LDFACC         ; Move value to FACC1.
+ 001372 B773 20 E3 DC                jsr CNV_PRT        ; Convert to ASCII and print.
+ 001373 B776 4C A0 B7                jmp BMPVAR         ; Do CR, then next var.
+ 001374 B779 22          FMTSTR      .byte '"'          
+ 001375 B77A 3D                      .byte '='           
+ 001376 B77B 24                      .byte '$'
+ 001377                  ;
+ 001378                  ;  Print a string variable to the screen.
+ 001379                  ;
+ 001380 B77C 20 BB B7    STRVAR      jsr PRTNAM         ; Print variable name. 
+ 001381 B77F A2 02                   ldx #$02            
+ 001382 B781 BD 79 B7    @           lda FMTSTR,x       ; Set display for string var.
+ 001383 B784 20 45 CA                jsr PUTCHR          
+ 001384 B787 CA                      dex                 
+ 001385 B788 10 F7                   bpl @B             
+ 001386 B78A A0 04                   ldy #$04           ; Move string pointer to
+ 001387 B78C B1 5C                   lda (TMPTR3),y     ;  STRPTR for print routine.
+ 001388 B78E 85 20                   sta STRPTR+1       
+ 001389 B790 88                      dey                 
+ 001390 B791 B1 5C                   lda (TMPTR3),y      
+ 001391 B793 85 1F                   sta STRPTR          
+ 001392 B795 88                      dey                 
+ 001393 B796 B1 5C                   lda (TMPTR3),y     ; Get number of chars
+ 001394 B798 20 22 CA                jsr PRTSTR         ;  and print string. 
+ 001395 B79B A9 22                   lda #'"'            
+ 001396 B79D 20 45 CA                jsr PUTCHR         ; Put closing quote
+ 001397 B7A0 20 DE C9    BMPVAR      jsr PUT_CRLF       ;  and CR/LF.
+ 001398 B7A3 20 E1 FF    NOTVAR      jsr STOPKEY         
+ 001399 B7A6 A5 98       @           lda SHIFTKEY       ; Wait for SHIFT key.
+ 001400 B7A8 D0 FC                   bne @B              
+ 001401 B7AA 18                      clc                ; Skip over variable
+ 001402 B7AB A5 5C                   lda TMPTR3         ;  descriptor.
+ 001403 B7AD 69 07                   adc #$07           ; BASIC variable descriptors
+ 001404 B7AF 85 5C                   sta TMPTR3         ;  occupy seven bytes.
+ 001405 B7B1 A6 5D                   ldx TMPTR3+1       
+ 001406 B7B3 90 01                   bcc @F              
+ 001407 B7B5 E8                      inx                 
+ 001408 B7B6 86 5D       @           stx TMPTR3+1        
+ 001409 B7B8 4C 13 B7                jmp VARLOOP        ; Do next variable.
+ 001410                  
+ 001411 B7BB A5 42       PRTNAM      lda VARNAM         ; Print name of current var.
+ 001412 B7BD 20 45 CA                jsr PUTCHR         
+ 001413 B7C0 A5 43                   lda VARNAM+1        
+ 001414 B7C2 F0 03                   beq @F              
+ 001415 B7C4 20 45 CA                jsr PUTCHR          
+ 001416 B7C7 60          @           rts                
+ 001417                  ;
+ 001418                  ; Skip through BASIC line links to locate end of program.
+ 001419                  ; Then reset pointer to start of BASIC variables.
+ 001420                  ;
+
+                              page 27
+
+ toolkit.cba   cbA65 v.1.00a, Feb 28 2008  -- Thu Mar 06 08:20:27 2008
+
+ "BASIC Programmer's Toolkit for Commodore Pet BASIC v2.0"
+
+ 001421 B7C8 20 76 B2    RSTVARP     jsr SETBAS         ; Set to start of BASIC ptr.
+ 001422 B7CB 20 DF B0    @           jsr SKPLNK         ; Follow links to end of pgm.
+ 001423 B7CE D0 FB                   bne @B              
+ 001424 B7D0 18                      clc                ; Now correct pointer to
+ 001425 B7D1 8A                      txa                ;  BASIC variables.
+ 001426 B7D2 A6 5D                   ldx TMPTR3+1        
+ 001427 B7D4 69 02                   adc #$02            
+ 001428 B7D6 85 2A                   sta VARPTR          
+ 001429 B7D8 90 01                   bcc @F              
+ 001430 B7DA E8                      inx                 
+ 001431 B7DB 86 2B       @           stx VARPTR+1        
+ 001432 B7DD 60                      rts                 
+ 001433                  ;
+ 001434                  ;   Palo Alto ICs copyright message
+ 001435                  ;
+ 001436 B7DE 28 43 29 20 CPYRT       .text '(C) 1979 PAICS'  ; Palo Alto ICs copyright
+        B7E2 31 39 37 39 
+        B7E6 20 50 41 49 
+        B7EA 43 53 
+ 001437 B7EC 0D                      .byte $0D               ;  notice.
+ 001438 B7ED 00                      .byte $00                
+ 001439                  ;
+ 001440                  ;   (residual garbage in original ROM)
+ 001441                  ;
+ 001442 B7EE 41                      .text 'A'       
+ 001443 B7EF 49                      .text 'I'        
+ 001444 B7F0 43                      .text 'C'        
+ 001445 B7F1 53                      .text 'S'        
+ 001446 B7F2 0D                      .byte $0D        
+ 001447 B7F3 00                      .byte $00        
+ 001448 B7F4 CB                      .byte $CB        
+ 001449 B7F5 00                      .byte $00       
+ 001450 B7F6 00                      .byte $00        
+ 001451 B7F7 00                      .byte $00        
+ 001452 B7F8 00                      .byte $00        
+ 001453 B7F9 00                      .byte $00       
+ 001454 B7FA 00                      .byte $00        
+ 001455 B7FB 00                      .byte $00        
+ 001456 B7FC 00                      .byte $00        
+ 001457 B7FD 00                      .byte $00        
+ 001458 B7FE 00                      .byte $00        
+ 001459 B7FF 00                      .byte $00        
+ 001460                              .end
+
+NUMBER OF SYMBOLS: 208
+
+
+
+
+
+
+
+
+
+                              page 28
+
